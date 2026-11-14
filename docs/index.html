@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Rondjes">
+<meta name="theme-color" content="#f3f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121614" media="(prefers-color-scheme: dark)">
+<title>Rondjes</title>
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+/* Layout: map on top, selected loop card, then a "bib number" grid of all 81 distances. */
+:root {
+  --bg: #f3f5f2;
+  --surface: #ffffff;
+  --fg: #16201b;
+  --muted: #5f6b64;
+  --line: #dde3dd;
+  --accent: #ff5a1f;      /* hi-vis route orange */
+  --accent-ink: #ffffff;
+  --ok: #1f8a4c;
+  --ok-soft: #dff1e5;
+  --chip: #ffffff;
+  --chip-gen: #fff1ea;
+  --danger: #b42318;
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121614; --surface: #1b211e; --fg: #e8eee9; --muted: #98a59d; --line: #2b3430;
+    --accent: #ff6a33; --accent-ink: #1a0d05; --ok: #4cc27c; --ok-soft: #173826;
+    --chip: #1b211e; --chip-gen: #33231a; --danger: #ff8a7a;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 15px/1.45 var(--font-body);
+  -webkit-text-size-adjust: 100%;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+button { font: inherit; color: inherit; }
+.wrap {
+  max-width: 720px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header {
+  position: sticky; top: 0; z-index: 1000;
+  background: var(--bg);
+  padding-top: env(safe-area-inset-top, 0px);
+  border-bottom: 1px solid var(--line);
+}
+header .wrap { display: flex; align-items: center; gap: 12px; padding-block: 10px; }
+.brand { font-family: var(--font-display); font-weight: 800; font-size: 28px; letter-spacing: .01em; line-height: 1; text-transform: uppercase; }
+.brand span { color: var(--accent); }
+.home-btn {
+  margin-left: auto; display: flex; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 12px; font-size: 13px; color: var(--muted); max-width: 60%;
+  cursor: pointer;
+}
+.home-btn b { color: var(--fg); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+#map { height: 42vh; min-height: 260px; background: var(--line); }
+.leaflet-container { font: inherit; }
+.home-pin {
+  width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+  display: grid; place-items: center; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px; margin-top: 12px; position: relative; z-index: 500;
+  box-shadow: 0 6px 20px rgba(0,0,0,.08);
+}
+.card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.card-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 44px; line-height: 1; font-variant-numeric: tabular-nums; }
+.badge { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+.stat { min-width: 0; }
+.stat small { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.stat strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+.status { color: var(--muted); font-size: 13px; min-height: 1.4em; margin: 0 0 10px; }
+.status.err { color: var(--danger); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  flex: 1 1 auto; min-height: 44px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); font-weight: 600; padding: 0 14px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn:focus-visible, .chip:focus-visible, .home-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.section-title { display: flex; align-items: baseline; gap: 8px; margin: 26px 0 8px; }
+.section-title h3 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.section-title span { color: var(--muted); font-size: 13px; }
+.progress { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.progress div { height: 100%; background: var(--ok); width: 0; transition: width .3s; }
+.progress-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.batch { margin-top: 12px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; margin-bottom: 32px; }
+.chip {
+  position: relative; border: 1px solid var(--line); background: var(--chip); border-radius: 10px;
+  min-height: 56px; padding: 6px 4px; cursor: pointer; text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.chip b { font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; }
+.chip small { font-size: 10px; color: var(--muted); letter-spacing: .04em; }
+.chip.gen { background: var(--chip-gen); }
+.chip.done { background: var(--ok-soft); border-color: transparent; }
+.chip.done b { color: var(--ok); }
+.chip.done::after { content: "✓"; position: absolute; top: 3px; right: 6px; font-size: 11px; color: var(--ok); font-weight: 700; }
+.chip.sel { outline: 3px solid var(--accent); outline-offset: -1px; }
+.chip.busy small { color: var(--accent); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; border: 1px solid var(--line); }
+
+/* setup sheet */
+.sheet-bg { position: fixed; inset: 0; z-index: 2000; background: rgba(10,14,12,.45); display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  background: var(--bg); width: 100%; max-width: 560px; max-height: 92vh; overflow: auto;
+  border-radius: 18px 18px 0 0;
+  padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.sheet h2 { font-family: var(--font-display); font-size: 32px; text-transform: uppercase; margin: 0 0 6px; line-height: 1; }
+.sheet p { color: var(--muted); margin: 0 0 14px; }
+.sheet form { display: flex; gap: 8px; margin-top: 10px; }
+.sheet input {
+  flex: 1; min-width: 0; min-height: 44px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--fg); padding: 0 12px; font: inherit; font-size: 16px;
+}
+.or { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 0 4px; }
+.results { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.results button {
+  width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; cursor: pointer;
+}
+.results small { display: block; color: var(--muted); }
+.note { font-size: 12px; color: var(--muted); margin-top: 12px; }
+footer { font-size: 12px; color: var(--muted); padding-bottom: 24px; }
+footer a { color: inherit; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand">Rond<span>jes</span></div>
+    <button class="home-btn" id="homeBtn" type="button" aria-label="Thuisadres wijzigen">🏠 <b id="homeName">Thuis instellen</b></button>
+  </div>
+</header>
+
+<div id="map" aria-label="Kaart met route"></div>
+
+<main class="wrap">
+  <section class="card" aria-live="polite">
+    <div class="card-head">
+      <h2 id="selTitle">–</h2>
+      <span class="badge" id="selBadge" hidden>Gelopen</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><small>Route</small><strong id="stRoute">–</strong></div>
+      <div class="stat"><small>Verschil</small><strong id="stDiff">–</strong></div>
+      <div class="stat"><small>Op 6:00/km</small><strong id="stTime">–</strong></div>
+    </div>
+    <p class="status" id="status"></p>
+    <div class="actions">
+      <button class="btn primary" id="doneBtn" type="button">Markeer als gelopen</button>
+      <button class="btn" id="regenBtn" type="button">↻ Andere route</button>
+      <button class="btn" id="gpxBtn" type="button">GPX</button>
+    </div>
+  </section>
+
+  <div class="section-title"><h3>Voortgang</h3></div>
+  <div class="progress"><div id="progBar"></div></div>
+  <div class="progress-row"><span id="progText">0 van 81 gelopen</span><span id="progKm">0 km</span></div>
+  <div class="batch">
+    <button class="btn" id="batchBtn" type="button" style="width:100%">Maak alle routes alvast</button>
+  </div>
+
+  <div class="section-title"><h3>Afstanden</h3><span>3 – 43 km, per 0,5 km</span></div>
+  <div class="legend">
+    <span><i style="background:var(--chip)"></i>nog geen route</span>
+    <span><i style="background:var(--chip-gen)"></i>route klaar</span>
+    <span><i style="background:var(--ok-soft)"></i>gelopen</span>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    Kaart © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-bijdragers ·
+    Routes via FOSSGIS OSRM (te voet) · Gegevens blijven op dit toestel.
+  </footer>
+</main>
+
+<div class="sheet-bg" id="setup" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <h2 id="setupTitle">Waar begin je?</h2>
+    <p>Elk rondje start en eindigt bij je huis. Je krijgt 81 rondjes, van 3 tot 43 km, steeds een halve kilometer langer.</p>
+    <button class="btn primary" id="locBtn" type="button" style="width:100%">📍 Gebruik mijn huidige locatie</button>
+    <div class="or">of zoek je adres</div>
+    <form id="searchForm">
+      <input id="searchInput" type="search" placeholder="Straat 12, Plaats" autocomplete="street-address" enterkeyhint="search">
+      <button class="btn" type="submit" style="flex:0 0 auto">Zoek</button>
+    </form>
+    <ul class="results" id="results"></ul>
+    <p class="status" id="setupStatus"></p>
+    <p class="note">Een nieuw thuisadres wist de bestaande routes. Je afgevinkte rondjes blijven bewaard.</p>
+    <button class="btn" id="setupClose" type="button" style="width:100%;margin-top:6px" hidden>Annuleer</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const OSRM = "https://routing.openstreetmap.de/routed-foot/route/v1/foot/";
+const STEPS = Array.from({ length: 81 }, (_, i) => i + 6);   // 6 = 3,0 km … 86 = 43,0 km
+const KEY = "rondjes.v1";
+const TOLERANCE = 80;        // metres
+const MAX_ITER = 8;
+
+// ---------- state ----------
+let state = { home: null, homeName: "", loops: {}, done: {}, factor: 1.3, sel: null };
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s) state = Object.assign(state, s); } catch (e) {}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch (e) { setStatus("Opslaan mislukt: de opslag van je browser is vol.", true); }
+}
+
+const km = s => s / 2;
+const fmt = (v, d = 1) => v.toLocaleString("nl-NL", { minimumFractionDigits: d, maximumFractionDigits: d });
+const label = s => fmt(km(s)) + " km";
+const nextStep = () => STEPS.find(s => !state.done[s]) ?? null;
+const $ = id => document.getElementById(id);
+
+// ---------- geo ----------
+function destination([lat, lon], dist, brg) {
+  const R = 6371000, d = dist / R, t = brg * Math.PI / 180;
+  const p1 = lat * Math.PI / 180, l1 = lon * Math.PI / 180;
+  const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(t));
+  const l2 = l1 + Math.atan2(Math.sin(t) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+  return [p2 * 180 / Math.PI, ((l2 * 180 / Math.PI) + 540) % 360 - 180];
+}
+function circlePoints(home, radius, bearing, n = 4) {
+  const center = destination(home, radius, bearing);
+  const homeAngle = bearing + 180;
+  return Array.from({ length: n }, (_, i) => destination(center, radius, homeAngle + (i + 1) * 360 / (n + 1)));
+}
+function decodePolyline(str) {
+  const out = []; let i = 0, lat = 0, lon = 0;
+  while (i < str.length) {
+    for (const which of [0, 1]) {
+      let b, shift = 0, res = 0;
+      do { b = str.charCodeAt(i++) - 63; res |= (b & 31) << shift; shift += 5; } while (b >= 32);
+      const v = (res & 1) ? ~(res >> 1) : (res >> 1);
+      if (which === 0) lat += v; else lon += v;
+    }
+    out.push([lat / 1e5, lon / 1e5]);
+  }
+  return out;
+}
+
+// ---------- routing ----------
+let lastRequest = 0;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function route(points) {
+  const wait = lastRequest + 1100 - Date.now();      // be gentle with the free server
+  if (wait > 0) await sleep(wait);
+  lastRequest = Date.now();
+  const coords = points.map(([la, lo]) => lo.toFixed(6) + "," + la.toFixed(6)).join(";");
+  const res = await fetch(OSRM + coords + "?overview=full&geometries=polyline&steps=false");
+  if (res.status === 429) { await sleep(5000); return route(points); }
+  const data = await res.json();
+  if (data.code !== "Ok" || !data.routes?.length) throw new Error(data.message || data.code || "Geen route");
+  return { meters: data.routes[0].distance, poly: data.routes[0].geometry };
+}
+
+async function makeLoop(step, bearing, onProgress) {
+  const target = km(step) * 1000;
+  const home = state.home;
+  let radius = target / (2 * Math.PI * state.factor);
+  let best = null, fails = 0;
+  for (let i = 0; i < MAX_ITER; i++) {
+    onProgress && onProgress(`Route zoeken, poging ${i + 1}…`);
+    let r;
+    try { r = await route([home, ...circlePoints(home, radius, bearing), home]); }
+    catch (e) {
+      if (++fails > 3) throw e;
+      bearing += 47; i--; continue;            // e.g. a point in water: turn a bit
+    }
+    if (!best || Math.abs(r.meters - target) < Math.abs(best.meters - target)) best = { ...r, bearing };
+    // learn how much longer roads are than the ideal circle, for the next loops
+    state.factor = 0.7 * state.factor + 0.3 * (r.meters / (2 * Math.PI * radius));
+    if (Math.abs(r.meters - target) <= TOLERANCE) break;
+    radius *= Math.pow(target / r.meters, 0.9);
+  }
+  if (!best) throw new Error("Geen route gevonden");
+  return { meters: best.meters, poly: best.poly, bearing: best.bearing, at: Date.now() };
+}
+
+const busy = new Set();
+async function generate(step, random = false) {
+  if (!state.home || busy.has(step)) return;
+  busy.add(step); renderGrid(); if (step === state.sel) renderCard();
+  const bearing = random ? Math.random() * 360 : (step * 137.508) % 360;
+  try {
+    const homeAtStart = state.home;
+    const loop = await makeLoop(step, bearing, msg => { if (step === state.sel) setStatus(msg); });
+    if (state.home !== homeAtStart) return;      // home changed meanwhile: drop this route
+    state.loops[step] = loop; save();
+    if (step === state.sel) setStatus("");
+  } catch (e) {
+    if (step === state.sel) setStatus("Geen route gevonden (" + e.message + "). Probeer ‘Andere route’.", true);
+  } finally {
+    busy.delete(step); renderGrid(); renderProgress();
+    if (step === state.sel) { renderCard(); drawRoute(); }
+  }
+}
+
+// ---------- map ----------
+const map = L.map("map", { zoomControl: false, attributionControl: true });
+L.control.zoom({ position: "bottomright" }).addTo(map);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: "© OpenStreetMap"
+}).addTo(map);
+map.setView([52.1, 5.3], 7);
+let homeMarker = null, routeLine = null;
+const homeIcon = L.divIcon({ className: "", html: '<div class="home-pin">⌂</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
+
+function drawHome() {
+  if (homeMarker) homeMarker.remove();
+  if (state.home) homeMarker = L.marker(state.home, { icon: homeIcon, zIndexOffset: 1000 }).addTo(map);
+}
+function drawRoute() {
+  if (routeLine) { routeLine.remove(); routeLine = null; }
+  const loop = state.loops[state.sel];
+  if (loop) {
+    const color = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ff5a1f";
+    routeLine = L.polyline(decodePolyline(loop.poly), { color, weight: 5, opacity: .9, lineJoin: "round" }).addTo(map);
+    map.fitBounds(routeLine.getBounds(), { paddingTopLeft: [20, 20], paddingBottomRight: [20, 44], animate: false });
+  } else if (state.home) {
+    map.setView(state.home, 14);
+  }
+}
+
+// ---------- rendering ----------
+function setStatus(msg, err = false) { const el = $("status"); el.textContent = msg; el.classList.toggle("err", err); }
+
+function renderHeader() { $("homeName").textContent = state.home ? (state.homeName || "Thuis") : "Thuis instellen"; }
+
+function renderCard() {
+  const s = state.sel, loop = state.loops[s], done = !!state.done[s];
+  $("selTitle").textContent = s ? label(s) : "–";
+  $("selBadge").hidden = !done;
+  if (done) $("selBadge").textContent = "Gelopen " + new Date(state.done[s]).toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+  $("stRoute").textContent = loop ? fmt(loop.meters / 1000, 2) + " km" : "–";
+  if (loop) {
+    const d = Math.round(loop.meters - km(s) * 1000);
+    $("stDiff").textContent = (d >= 0 ? "+" : "−") + Math.abs(d) + " m";
+    const min = Math.round(loop.meters / 1000 * 6);
+    $("stTime").textContent = Math.floor(min / 60) + ":" + String(min % 60).padStart(2, "0") + " u";
+  } else { $("stDiff").textContent = "–"; $("stTime").textContent = "–"; }
+  const doneBtn = $("doneBtn");
+  doneBtn.textContent = done ? "✓ Gelopen" : "Markeer als gelopen";
+  doneBtn.classList.toggle("done", done); doneBtn.classList.toggle("primary", !done);
+  doneBtn.disabled = !s;
+  $("regenBtn").disabled = !s || !state.home || busy.has(s);
+  $("regenBtn").textContent = loop ? "↻ Andere route" : "Maak route";
+  $("gpxBtn").disabled = !loop;
+  if (busy.has(s) && !$("status").textContent) setStatus("Route zoeken…");
+}
+
+function renderGrid() {
+  const g = $("grid");
+  if (!g.children.length) {
+    for (const s of STEPS) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.dataset.step = s;
+      b.innerHTML = `<b>${fmt(km(s))}</b><small>km</small>`;
+      b.addEventListener("click", () => select(s));
+      g.appendChild(b);
+    }
+  }
+  for (const b of g.children) {
+    const s = +b.dataset.step;
+    b.classList.toggle("done", !!state.done[s]);
+    b.classList.toggle("gen", !!state.loops[s] && !state.done[s]);
+    b.classList.toggle("sel", s === state.sel);
+    b.classList.toggle("busy", busy.has(s));
+    b.querySelector("small").textContent = busy.has(s) ? "bezig…" : "km";
+    b.setAttribute("aria-label", label(s) + (state.done[s] ? ", gelopen" : state.loops[s] ? ", route klaar" : ""));
+  }
+}
+
+function renderProgress() {
+  const n = Object.keys(state.done).length;
+  $("progBar").style.width = (n / STEPS.length * 100) + "%";
+  $("progText").textContent = `${n} van ${STEPS.length} gelopen`;
+  const total = Object.keys(state.done).reduce((t, s) => t + (state.loops[s]?.meters ?? km(+s) * 1000), 0);
+  $("progKm").textContent = fmt(total / 1000) + " km totaal";
+  const made = STEPS.filter(s => state.loops[s]).length;
+  const bb = $("batchBtn");
+  if (batchRunning) bb.textContent = `Stop met routes maken (${made}/${STEPS.length})`;
+  else bb.textContent = made === STEPS.length ? "Alle routes zijn klaar" : `Maak alle routes alvast (${made}/${STEPS.length} klaar)`;
+  bb.disabled = !state.home || (!batchRunning && made === STEPS.length);
+}
+
+function renderAll() { renderHeader(); renderCard(); renderGrid(); renderProgress(); }
+
+function select(s) {
+  state.sel = s; save(); setStatus("");
+  window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  renderCard(); renderGrid(); drawRoute();
+  if (!state.loops[s]) generate(s);
+}
+
+// ---------- actions ----------
+$("doneBtn").addEventListener("click", () => {
+  const s = state.sel; if (!s) return;
+  if (state.done[s]) delete state.done[s]; else state.done[s] = Date.now();
+  save(); renderAll();
+});
+$("regenBtn").addEventListener("click", () => { setStatus(""); generate(state.sel, !!state.loops[state.sel]); });
+$("gpxBtn").addEventListener("click", async () => {
+  const s = state.sel, loop = state.loops[s]; if (!loop) return;
+  const pts = decodePolyline(loop.poly);
+  const name = "Rondje " + label(s);
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Rondjes" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>${name}</name><trkseg>\n` +
+    pts.map(([la, lo]) => `<trkpt lat="${la}" lon="${lo}"/>`).join("\n") + `\n</trkseg></trk>\n</gpx>\n`;
+  const fileName = `rondje-${km(s).toFixed(1)}km.gpx`;
+  const file = new File([gpx], fileName, { type: "application/gpx+xml" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
+  } catch (e) { if (e.name === "AbortError") return; }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(file); a.download = fileName;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+
+let batchRunning = false, batchCancelled = false;
+$("batchBtn").addEventListener("click", async () => {
+  if (batchRunning) { batchCancelled = true; return; }
+  batchRunning = true; batchCancelled = false; renderProgress();
+  for (const s of STEPS) {
+    if (batchCancelled) break;
+    if (!state.loops[s] && !busy.has(s)) await generate(s);
+  }
+  batchRunning = false; renderProgress();
+});
+
+// ---------- home setup ----------
+function openSetup() {
+  $("setup").hidden = false; $("setupClose").hidden = !state.home;
+  $("results").innerHTML = ""; $("setupStatus").textContent = "";
+}
+function closeSetup() { $("setup").hidden = true; }
+function setHome(latlng, name) {
+  const changed = !state.home || Math.abs(state.home[0] - latlng[0]) > 1e-5 || Math.abs(state.home[1] - latlng[1]) > 1e-5;
+  state.home = latlng; state.homeName = name || "Thuis";
+  if (changed) { state.loops = {}; batchCancelled = true; }
+  state.sel = nextStep() ?? 6;
+  save(); closeSetup(); drawHome(); renderAll(); drawRoute();
+  if (!state.loops[state.sel]) generate(state.sel);
+}
+$("homeBtn").addEventListener("click", openSetup);
+$("setupClose").addEventListener("click", closeSetup);
+$("locBtn").addEventListener("click", () => {
+  const st = $("setupStatus");
+  if (!navigator.geolocation) { st.textContent = "Je browser kan je locatie niet bepalen. Zoek je adres op."; return; }
+  st.textContent = "Locatie bepalen…";
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    let name = "Huidige locatie";
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${ll[0]}&lon=${ll[1]}&zoom=18&accept-language=nl`);
+      const d = await r.json(); const a = d.address || {};
+      name = [a.road, a.house_number].filter(Boolean).join(" ") || d.name || name;
+    } catch (e) {}
+    setHome(ll, name);
+  }, err => {
+    st.textContent = err.code === 1
+      ? "Geen toegang tot je locatie. Sta het toe via Instellingen › Privacy › Locatievoorzieningen › Safari, of zoek je adres op."
+      : "Je locatie kon niet worden bepaald. Zoek je adres op.";
+  }, { enableHighAccuracy: true, timeout: 15000 });
+});
+$("searchForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const q = $("searchInput").value.trim(); if (!q) return;
+  const st = $("setupStatus"), ul = $("results");
+  st.textContent = "Zoeken…"; ul.innerHTML = "";
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&accept-language=nl&q=${encodeURIComponent(q)}`);
+    const list = await r.json();
+    st.textContent = list.length ? "" : "Geen adres gevonden. Probeer straat, huisnummer en plaats.";
+    for (const it of list) {
+      const a = it.address || {};
+      const title = [a.road, a.house_number].filter(Boolean).join(" ") || it.name || it.display_name.split(",")[0];
+      const li = document.createElement("li"); const b = document.createElement("button");
+      b.type = "button";
+      const t = document.createElement("span"); t.textContent = title;
+      const sm = document.createElement("small"); sm.textContent = it.display_name;
+      b.append(t, sm);
+      b.addEventListener("click", () => setHome([+it.lat, +it.lon], title));
+      li.appendChild(b); ul.appendChild(li);
+    }
+  } catch (err) { st.textContent = "Zoeken mislukt. Controleer je internetverbinding."; }
+});
+
+// ---------- start ----------
+if (state.sel == null) state.sel = nextStep() ?? 6;
+drawHome(); renderAll(); drawRoute();
+if (!state.home) openSetup();
+else if (!state.loops[state.sel]) generate(state.sel);
+</script>
+</body>
+</html>
