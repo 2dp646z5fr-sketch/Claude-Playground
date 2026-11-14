@@ -5,42 +5,47 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Rondjes">
-<meta name="theme-color" content="#f3f5f2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121614" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1612" media="(prefers-color-scheme: dark)">
 <title>Rondjes</title>
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-/* Layout: map on top, selected loop card, then a "bib number" grid of all 81 distances. */
+/* Layout: full-bleed map hero with floating glass bar; a route sheet overlaps the map;
+   below it a distance picker, progress ring and the distance grid grouped per 5 km. */
 :root {
-  --bg: #f3f5f2;
-  --surface: #ffffff;
-  --fg: #16201b;
-  --muted: #5f6b64;
-  --line: #dde3dd;
-  --accent: #ff5a1f;      /* hi-vis route orange */
-  --accent-ink: #ffffff;
-  --ok: #1f8a4c;
-  --ok-soft: #dff1e5;
-  --chip: #ffffff;
-  --chip-gen: #fff1ea;
+  --bg: #eef1ea;
+  --surface: #fbfcf8;
+  --surface-2: #f3f6ef;
+  --ink: #142219;
+  --muted: #5d6b60;
+  --line: #d9dfd3;
+  --pine: #1f4d36;
+  --pine-ink: #f3f7ef;
+  --moss: #6fa64c;
+  --moss-soft: #e2eed8;
+  --sun: #ff6b2c;
+  --urban: #a3abae;
   --danger: #b42318;
-  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --glass: rgba(251, 252, 248, .78);
+  --shadow: 0 10px 30px rgba(20, 34, 25, .10), 0 2px 6px rgba(20, 34, 25, .06);
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
   --font-body: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121614; --surface: #1b211e; --fg: #e8eee9; --muted: #98a59d; --line: #2b3430;
-    --accent: #ff6a33; --accent-ink: #1a0d05; --ok: #4cc27c; --ok-soft: #173826;
-    --chip: #1b211e; --chip-gen: #33231a; --danger: #ff8a7a;
+    --bg: #0f1612; --surface: #17201a; --surface-2: #1c271f; --ink: #e7eee6; --muted: #93a396; --line: #26322a;
+    --pine: #a6d396; --pine-ink: #0f1612; --moss: #86c262; --moss-soft: #1e3320; --sun: #ff7a3d; --urban: #5f696c;
+    --danger: #ff8a7a; --glass: rgba(23, 32, 26, .78);
+    --shadow: 0 10px 30px rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .25);
     color-scheme: dark;
   }
 }
@@ -48,207 +53,455 @@
 [hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
-  background: var(--bg); color: var(--fg);
+  background: var(--bg); color: var(--ink);
   font: 15px/1.45 var(--font-body);
   -webkit-text-size-adjust: 100%;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-tap-highlight-color: transparent;
 }
-button { font: inherit; color: inherit; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
 .wrap {
-  max-width: 720px; margin: 0 auto;
+  max-width: 680px; margin: 0 auto;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-header {
-  position: sticky; top: 0; z-index: 1000;
-  background: var(--bg);
-  padding-top: env(safe-area-inset-top, 0px);
-  border-bottom: 1px solid var(--line);
-}
-header .wrap { display: flex; align-items: center; gap: 12px; padding-block: 10px; }
-.brand { font-family: var(--font-display); font-weight: 800; font-size: 28px; letter-spacing: .01em; line-height: 1; text-transform: uppercase; }
-.brand span { color: var(--accent); }
-.home-btn {
-  margin-left: auto; display: flex; align-items: center; gap: 6px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
-  padding: 6px 12px; font-size: 13px; color: var(--muted); max-width: 60%;
-  cursor: pointer;
-}
-.home-btn b { color: var(--fg); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.num { font-variant-numeric: tabular-nums; }
 
-#map { height: 42vh; min-height: 260px; background: var(--line); }
-.leaflet-container { font: inherit; }
-.home-pin {
-  width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
-  display: grid; place-items: center; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35);
+/* ---------- hero map ---------- */
+.hero { position: relative; }
+#map { height: 56vh; min-height: 320px; max-height: 620px; background: var(--surface-2); }
+.leaflet-container { font: 12px var(--font-body); background: var(--surface-2); }
+.leaflet-bottom { bottom: 56px; }
+.tiles-soft { filter: saturate(.72) contrast(.94) brightness(1.03); }
+.tiles-topo { filter: saturate(.85); }
+@media (prefers-color-scheme: dark) {
+  .tiles-soft { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.55); }
+  .tiles-topo { filter: brightness(.72) contrast(1.05) saturate(.8); }
 }
+.leaflet-control-attribution { background: var(--glass) !important; color: var(--muted) !important; border-radius: 8px 0 0 8px; backdrop-filter: blur(8px); }
+.leaflet-control-attribution a { color: var(--muted) !important; }
+.hero::after { /* soft fade from map into page */
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 90px; pointer-events: none; z-index: 400;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+}
+.topbar {
+  position: absolute; z-index: 1000; left: 0; right: 0;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+}
+.topbar .wrap { display: flex; gap: 8px; align-items: center; }
+.glass {
+  background: var(--glass); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 999px; box-shadow: var(--shadow);
+}
+.logo { display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; }
+.logo svg { width: 30px; height: 30px; flex: none; }
+.logo b { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -.02em; }
+.pill { display: flex; align-items: center; gap: 6px; padding: 9px 14px; font-size: 13px; font-weight: 600; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); min-width: 0; }
+.pill span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill svg { width: 16px; height: 16px; flex: none; }
+.spacer { flex: 1; }
+.icon-btn { width: 42px; height: 42px; display: grid; place-items: center; padding: 0; }
+.icon-btn svg { width: 20px; height: 20px; }
+.map-toggle { position: absolute; z-index: 1000; right: max(16px, env(safe-area-inset-right, 0px)); bottom: 70px; display: flex; padding: 3px; gap: 2px; }
+.map-toggle button { border: 0; background: transparent; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.map-toggle button[aria-pressed="true"] { background: var(--pine); color: var(--pine-ink); }
+.home-pin { width: 34px; height: 34px; border-radius: 50%; background: var(--pine); color: var(--pine-ink); display: grid; place-items: center; border: 3px solid #fff; box-shadow: 0 3px 10px rgba(0,0,0,.35); }
+.home-pin svg { width: 16px; height: 16px; }
+.route-anim { transition: stroke-dashoffset 1.6s cubic-bezier(.4,.1,.2,1); }
 
-.card {
-  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
-  padding: 14px; margin-top: 12px; position: relative; z-index: 500;
-  box-shadow: 0 6px 20px rgba(0,0,0,.08);
+/* ---------- route sheet ---------- */
+.sheet-card {
+  position: relative; z-index: 500; margin-top: -64px;
+  background: var(--surface); border-radius: 22px; box-shadow: var(--shadow);
+  padding: 18px 18px 16px; border: 1px solid var(--line);
 }
-.card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.card-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 44px; line-height: 1; font-variant-numeric: tabular-nums; }
-.badge { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
-.stat { min-width: 0; }
-.stat small { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
-.stat strong { font-size: 17px; font-variant-numeric: tabular-nums; }
-.status { color: var(--muted); font-size: 13px; min-height: 1.4em; margin: 0 0 10px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.title-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
+.big { font-family: var(--font-display); font-weight: 800; font-size: clamp(48px, 15vw, 68px); line-height: .9; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.big small { font-size: .42em; font-weight: 700; letter-spacing: -.01em; margin-left: 4px; color: var(--muted); }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 6px; }
+.tag { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--moss-soft); color: var(--pine); }
+.tag.custom { background: color-mix(in srgb, var(--sun) 15%, transparent); color: var(--sun); }
+
+.nature { margin-top: 16px; }
+.nature-bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--surface-2); }
+.nature-bar i { display: block; height: 100%; transition: width .6s ease; }
+.nature-bar .g { background: var(--moss); }
+.nature-bar .o { background: color-mix(in srgb, var(--urban) 35%, var(--surface-2)); }
+.nature-bar .u { background: var(--urban); }
+.nature-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.nature-legend b { color: var(--ink); font-weight: 600; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.stat { background: var(--surface-2); border-radius: 14px; padding: 10px; min-width: 0; }
+.stat .eyebrow { font-size: 10px; }
+.stat small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat strong small { display: inline; font-size: .65em; color: var(--muted); margin-left: 2px; }
+.stat strong { display: block; font-family: var(--font-display); font-size: clamp(17px, 5.2vw, 21px); font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.elev { margin-top: 12px; height: 54px; }
+.elev svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.elev text { fill: var(--muted); font-size: 10px; font-family: var(--font-body); }
+.status { font-size: 13px; color: var(--muted); min-height: 1.45em; margin: 12px 0 0; display: flex; align-items: center; gap: 8px; }
 .status.err { color: var(--danger); }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--sun); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin-top: 12px; }
 .btn {
-  flex: 1 1 auto; min-height: 44px; border-radius: 10px; border: 1px solid var(--line);
-  background: var(--surface); font-weight: 600; padding: 0 14px; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 48px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface);
+  font-weight: 600; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform .12s ease, background .2s;
 }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.btn.done { background: var(--ok); border-color: var(--ok); color: #fff; }
-.btn:disabled { opacity: .5; cursor: default; }
-.btn:focus-visible, .chip:focus-visible, .home-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn:active { transform: scale(.97); }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.btn.primary { background: var(--pine); border-color: var(--pine); color: var(--pine-ink); }
+.btn.done { background: var(--moss); border-color: var(--moss); color: #fff; }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: .45; cursor: default; transform: none; }
+.linkish { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; font-size: 13px; margin-top: 10px; }
 
-.section-title { display: flex; align-items: baseline; gap: 8px; margin: 26px 0 8px; }
-.section-title h3 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
-.section-title span { color: var(--muted); font-size: 13px; }
-.progress { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
-.progress div { height: 100%; background: var(--ok); width: 0; transition: width .3s; }
-.progress-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
-.batch { margin-top: 12px; }
+/* ---------- sections ---------- */
+section.block { margin-top: 30px; }
+.block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+h2 { font-family: var(--font-display); font-weight: 750; font-size: 24px; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); font-size: 13px; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; margin-bottom: 32px; }
+.picker { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.stepper { display: flex; align-items: center; background: var(--surface-2); border-radius: 14px; padding: 4px; flex: 1 1 220px; min-width: 0; }
+.stepper button { width: 44px; height: 44px; border: 0; border-radius: 11px; background: var(--surface); font-size: 22px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.08); flex: none; }
+.stepper label { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 4px; min-width: 0; }
+.stepper input {
+  width: 100%; min-width: 0; max-width: 130px; border: 0; background: transparent; text-align: right;
+  font-family: var(--font-display); font-weight: 800; font-size: 34px; letter-spacing: -.03em; padding: 0; font-variant-numeric: tabular-nums;
+}
+.stepper input:focus { outline: none; }
+.stepper label span { font-weight: 700; color: var(--muted); font-family: var(--font-display); font-size: 18px; }
+.picker .btn { flex: 1 1 140px; }
+.hint { font-size: 12px; color: var(--muted); margin: 8px 2px 0; }
+.hint.err { color: var(--danger); }
+
+.progress { display: flex; gap: 18px; align-items: center; background: var(--pine); color: var(--pine-ink); border-radius: 22px; padding: 18px; }
+.ring { width: 92px; height: 92px; flex: none; position: relative; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring .track { stroke: color-mix(in srgb, var(--pine-ink) 20%, transparent); }
+.ring .val { stroke: var(--sun); transition: stroke-dashoffset .8s ease; }
+.ring b { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 22px; font-weight: 800; }
+.progress-text { min-width: 0; flex: 1; }
+.progress-text .big2 { font-family: var(--font-display); font-weight: 800; font-size: 26px; letter-spacing: -.02em; line-height: 1.05; }
+.progress-text p { margin: 4px 0 10px; opacity: .8; font-size: 13px; }
+.progress .btn { min-height: 40px; background: var(--pine-ink); color: var(--pine); border: 0; font-size: 14px; }
+.batch { margin-top: 10px; width: 100%; }
+
+.band { margin-top: 18px; }
+.band h3 { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; display: flex; gap: 8px; align-items: center; }
+.band h3::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px; }
 .chip {
-  position: relative; border: 1px solid var(--line); background: var(--chip); border-radius: 10px;
-  min-height: 56px; padding: 6px 4px; cursor: pointer; text-align: center;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: relative; border: 1px solid var(--line); background: var(--surface); border-radius: 14px;
+  min-height: 62px; padding: 8px 6px 10px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: transform .12s ease;
 }
-.chip b { font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; }
-.chip small { font-size: 10px; color: var(--muted); letter-spacing: .04em; }
-.chip.gen { background: var(--chip-gen); }
-.chip.done { background: var(--ok-soft); border-color: transparent; }
-.chip.done b { color: var(--ok); }
-.chip.done::after { content: "✓"; position: absolute; top: 3px; right: 6px; font-size: 11px; color: var(--ok); font-weight: 700; }
-.chip.sel { outline: 3px solid var(--accent); outline-offset: -1px; }
-.chip.busy small { color: var(--accent); }
-.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; border: 1px solid var(--line); }
+.chip:active { transform: scale(.95); }
+.chip b { font-family: var(--font-display); font-weight: 750; font-size: 21px; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.chip small { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.chip .meter { position: absolute; left: 10px; right: 10px; bottom: 6px; height: 3px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.chip .meter i { display: block; height: 100%; background: var(--moss); }
+.chip.done { background: var(--pine); border-color: var(--pine); color: var(--pine-ink); }
+.chip.done small { color: color-mix(in srgb, var(--pine-ink) 75%, transparent); }
+.chip.done .meter { background: color-mix(in srgb, var(--pine-ink) 20%, transparent); }
+.chip.done::after { content: ""; position: absolute; top: 6px; right: 6px; width: 14px; height: 14px; border-radius: 50%; background: var(--sun) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat; }
+.chip.custom { border-style: dashed; }
+.chip.sel { outline: 3px solid var(--sun); outline-offset: 1px; }
+.chip.busy small { color: var(--sun); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; vertical-align: -2px; margin-right: 5px; border: 1px solid var(--line); }
 
-/* setup sheet */
-.sheet-bg { position: fixed; inset: 0; z-index: 2000; background: rgba(10,14,12,.45); display: flex; align-items: flex-end; justify-content: center; }
-.sheet {
-  background: var(--bg); width: 100%; max-width: 560px; max-height: 92vh; overflow: auto;
-  border-radius: 18px 18px 0 0;
-  padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
-}
-.sheet h2 { font-family: var(--font-display); font-size: 32px; text-transform: uppercase; margin: 0 0 6px; line-height: 1; }
-.sheet p { color: var(--muted); margin: 0 0 14px; }
-.sheet form { display: flex; gap: 8px; margin-top: 10px; }
-.sheet input {
-  flex: 1; min-width: 0; min-height: 44px; border-radius: 10px; border: 1px solid var(--line);
-  background: var(--surface); color: var(--fg); padding: 0 12px; font: inherit; font-size: 16px;
-}
-.or { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 0 4px; }
-.results { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
-.results button {
-  width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line);
-  border-radius: 10px; padding: 10px 12px; cursor: pointer;
-}
-.results small { display: block; color: var(--muted); }
-.note { font-size: 12px; color: var(--muted); margin-top: 12px; }
-footer { font-size: 12px; color: var(--muted); padding-bottom: 24px; }
+footer { font-size: 12px; color: var(--muted); padding: 28px 0 calc(28px + env(safe-area-inset-bottom, 0px)); }
 footer a { color: inherit; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---------- modal sheets ---------- */
+.modal { position: fixed; inset: 0; z-index: 3000; background: rgba(8, 14, 10, .5); display: flex; align-items: flex-end; justify-content: center; animation: fade .2s ease; }
+.modal-card {
+  background: var(--bg); width: 100%; max-width: 560px; max-height: 92vh; overflow: auto;
+  border-radius: 26px 26px 0 0; animation: rise .28s cubic-bezier(.2,.8,.2,1);
+  padding: 22px max(18px, env(safe-area-inset-right, 0px)) calc(22px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
+}
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { transform: translateY(40px); opacity: .4; } }
+.modal-card h2 { font-size: 30px; }
+.modal-card p.lead { color: var(--muted); margin: 6px 0 16px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.field input {
+  min-height: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); padding: 0 12px; font-size: 16px; width: 100%; min-width: 0;
+}
+.row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.search { display: flex; gap: 8px; }
+.search .field { flex: 1; }
+.or { text-align: center; color: var(--muted); font-size: 12px; margin: 14px 0 8px; letter-spacing: .08em; text-transform: uppercase; }
+.results { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.results button { width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.results small { display: block; color: var(--muted); }
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+.modal-actions .btn { flex: 1; }
+.note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+.divider { height: 1px; background: var(--line); margin: 20px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
 </style>
 </head>
 <body>
 
-<header>
-  <div class="wrap">
-    <div class="brand">Rond<span>jes</span></div>
-    <button class="home-btn" id="homeBtn" type="button" aria-label="Thuisadres wijzigen">🏠 <b id="homeName">Thuis instellen</b></button>
-  </div>
-</header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h13V9.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M4 7h3.5c4.5 0 4.5 10 9 10H20M4 17h3.5c1.6 0 2.6-1.2 3.4-2.8M13.1 9.8C13.9 8.2 14.9 7 16.5 7H20M17.5 4.5 20 7l-2.5 2.5M17.5 14.5 20 17l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M5 12v7h14v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="9.5" r="2.5" fill="currentColor"/></symbol>
+</svg>
 
-<div id="map" aria-label="Kaart met route"></div>
+<div class="hero">
+  <div id="map" aria-label="Kaart met de route"></div>
+  <div class="topbar">
+    <div class="wrap">
+      <div class="glass logo" aria-label="Rondjes">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="var(--pine)"/><path d="M16 24.5c-5 0-8.5-3.6-8.5-8.2 0-4.8 3.6-8.8 8.6-8.8 4.8 0 8.4 3.7 8.4 8.2" fill="none" stroke="var(--pine-ink)" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="24.5" r="3" fill="var(--sun)"/></svg>
+        <b>Rondjes</b>
+      </div>
+      <div class="spacer"></div>
+      <button class="glass pill" id="homeBtn" type="button" aria-label="Thuisadres wijzigen"><svg><use href="#i-home"/></svg><span id="homeName">Thuis instellen</span></button>
+      <button class="glass icon-btn" id="settingsBtn" type="button" aria-label="Instellingen"><svg><use href="#i-gear"/></svg></button>
+    </div>
+  </div>
+  <div class="glass map-toggle" role="group" aria-label="Kaartstijl">
+    <button type="button" id="tilesMap" aria-pressed="true">Kaart</button>
+    <button type="button" id="tilesTerrain" aria-pressed="false">Terrein</button>
+  </div>
+</div>
 
 <main class="wrap">
-  <section class="card" aria-live="polite">
-    <div class="card-head">
-      <h2 id="selTitle">–</h2>
-      <span class="badge" id="selBadge" hidden>Gelopen</span>
+  <article class="sheet-card" aria-live="polite">
+    <div class="eyebrow" id="selEyebrow">Rondje vanaf huis</div>
+    <div class="title-row">
+      <div class="big" id="selTitle">–</div>
+      <div class="tags">
+        <span class="tag" id="tagDone" hidden>Gelopen</span>
+        <span class="tag custom" id="tagCustom" hidden>Eigen afstand</span>
+      </div>
     </div>
+
+    <div class="nature">
+      <div class="nature-bar" aria-hidden="true"><i class="g" id="barG" style="width:0"></i><i class="o" id="barO" style="width:0"></i><i class="u" id="barU" style="width:0"></i></div>
+      <div class="nature-legend">
+        <span><i class="dot" style="background:var(--moss)"></i><b id="pctG">–</b> natuur &amp; groen</span>
+        <span><i class="dot" style="background:var(--urban)"></i><b id="pctU">–</b> bebouwd</span>
+      </div>
+    </div>
+
     <div class="stats">
-      <div class="stat"><small>Route</small><strong id="stRoute">–</strong></div>
-      <div class="stat"><small>Verschil</small><strong id="stDiff">–</strong></div>
-      <div class="stat"><small>Op 6:00/km</small><strong id="stTime">–</strong></div>
+      <div class="stat"><div class="eyebrow">Route</div><strong id="stRoute">–</strong><small id="stDiff">&nbsp;</small></div>
+      <div class="stat"><div class="eyebrow">Looptijd</div><strong id="stTime">–</strong><small id="stPace">&nbsp;</small></div>
+      <div class="stat"><div class="eyebrow">Klimmen</div><strong id="stAsc">–</strong><small id="stElev">&nbsp;</small></div>
     </div>
+    <div class="elev" id="elev" aria-hidden="true"></div>
+
     <p class="status" id="status"></p>
     <div class="actions">
-      <button class="btn primary" id="doneBtn" type="button">Markeer als gelopen</button>
-      <button class="btn" id="regenBtn" type="button">↻ Andere route</button>
-      <button class="btn" id="gpxBtn" type="button">GPX</button>
+      <button class="btn primary" id="doneBtn" type="button"><svg><use href="#i-check"/></svg><span>Afvinken</span></button>
+      <button class="btn" id="regenBtn" type="button" aria-label="Andere route"><svg><use href="#i-shuffle"/></svg><span>Andere</span></button>
+      <button class="btn" id="gpxBtn" type="button" aria-label="Deel als GPX"><svg><use href="#i-share"/></svg><span>GPX</span></button>
     </div>
+    <button class="linkish" id="removeCustom" type="button" hidden>Verwijder deze afstand uit mijn lijst</button>
+  </article>
+
+  <section class="block" aria-labelledby="pickTitle">
+    <div class="block-head"><h2 id="pickTitle">Kies je afstand</h2><span class="sub">1 – 60 km</span></div>
+    <form class="picker" id="pickForm" autocomplete="off">
+      <div class="stepper">
+        <button type="button" id="minusBtn" aria-label="Halve kilometer minder">−</button>
+        <label for="kmInput"><input id="kmInput" type="text" inputmode="decimal" enterkeyhint="go" value="10,0" aria-label="Afstand in kilometer"><span>km</span></label>
+        <button type="button" id="plusBtn" aria-label="Halve kilometer meer">+</button>
+      </div>
+      <button class="btn primary" type="submit"><svg><use href="#i-pin"/></svg>Maak rondje</button>
+    </form>
+    <p class="hint" id="pickHint">Typ een afstand of gebruik − en +. Afstanden buiten je reeks komen gestippeld in je lijst.</p>
   </section>
 
-  <div class="section-title"><h3>Voortgang</h3></div>
-  <div class="progress"><div id="progBar"></div></div>
-  <div class="progress-row"><span id="progText">0 van 81 gelopen</span><span id="progKm">0 km</span></div>
-  <div class="batch">
-    <button class="btn" id="batchBtn" type="button" style="width:100%">Maak alle routes alvast</button>
-  </div>
+  <section class="block" aria-labelledby="progTitle">
+    <div class="progress">
+      <div class="ring">
+        <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="42" fill="none" stroke-width="10"/><circle class="val" id="ringVal" cx="50" cy="50" r="42" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="263.9" stroke-dashoffset="263.9"/></svg>
+        <b id="ringPct">0%</b>
+      </div>
+      <div class="progress-text">
+        <div class="big2" id="progTitle">0 van 81 rondjes</div>
+        <p id="progSub">0 km gelopen</p>
+        <button class="btn" id="nextBtn" type="button">Volgende: 3,0 km →</button>
+      </div>
+    </div>
+    <button class="btn ghost batch" id="batchBtn" type="button">Maak alle routes alvast</button>
+  </section>
 
-  <div class="section-title"><h3>Afstanden</h3><span>3 – 43 km, per 0,5 km</span></div>
-  <div class="legend">
-    <span><i style="background:var(--chip)"></i>nog geen route</span>
-    <span><i style="background:var(--chip-gen)"></i>route klaar</span>
-    <span><i style="background:var(--ok-soft)"></i>gelopen</span>
-  </div>
-  <div class="grid" id="grid"></div>
+  <section class="block" aria-labelledby="listTitle">
+    <div class="block-head"><h2 id="listTitle">Alle rondjes</h2><span class="sub" id="seriesLabel">3 – 43 km per 0,5 km</span></div>
+    <div class="legend">
+      <span><i style="background:var(--surface)"></i>te doen</span>
+      <span><i style="background:var(--moss)"></i>groen-aandeel van de route</span>
+      <span><i style="background:var(--pine)"></i>gelopen</span>
+    </div>
+    <div id="bands"></div>
+  </section>
 
   <footer>
-    Kaart © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-bijdragers ·
-    Routes via FOSSGIS OSRM (te voet) · Gegevens blijven op dit toestel.
+    Kaart © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-bijdragers en OpenTopoMap.
+    Routes via <a href="https://brouter.de" target="_blank" rel="noopener">BRouter</a> met een eigen natuurprofiel (paden, bos en water voorrang; drukke en bebouwde wegen vermeden).
+    Alles wordt alleen op dit toestel bewaard.
   </footer>
 </main>
 
-<div class="sheet-bg" id="setup" hidden>
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+<!-- home setup -->
+<div class="modal" id="setup" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
     <h2 id="setupTitle">Waar begin je?</h2>
-    <p>Elk rondje start en eindigt bij je huis. Je krijgt 81 rondjes, van 3 tot 43 km, steeds een halve kilometer langer.</p>
-    <button class="btn primary" id="locBtn" type="button" style="width:100%">📍 Gebruik mijn huidige locatie</button>
+    <p class="lead">Elk rondje start en eindigt bij je voordeur. Rondjes kiezen zoveel mogelijk paden door bos, polder en langs water.</p>
+    <button class="btn primary" id="locBtn" type="button" style="width:100%"><svg><use href="#i-pin"/></svg>Gebruik mijn huidige locatie</button>
     <div class="or">of zoek je adres</div>
-    <form id="searchForm">
-      <input id="searchInput" type="search" placeholder="Straat 12, Plaats" autocomplete="street-address" enterkeyhint="search">
-      <button class="btn" type="submit" style="flex:0 0 auto">Zoek</button>
+    <form class="search" id="searchForm">
+      <label class="field"><span>Adres</span><input id="searchInput" type="search" placeholder="Straat 12, Plaats" autocomplete="street-address" enterkeyhint="search"></label>
+      <button class="btn" type="submit" style="align-self:flex-end">Zoek</button>
     </form>
     <ul class="results" id="results"></ul>
     <p class="status" id="setupStatus"></p>
     <p class="note">Een nieuw thuisadres wist de bestaande routes. Je afgevinkte rondjes blijven bewaard.</p>
-    <button class="btn" id="setupClose" type="button" style="width:100%;margin-top:6px" hidden>Annuleer</button>
+    <div class="modal-actions"><button class="btn" id="setupClose" type="button" hidden>Annuleer</button></div>
   </div>
+</div>
+
+<!-- settings -->
+<div class="modal" id="settings" hidden>
+  <form class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" id="settingsForm">
+    <h2 id="settingsTitle">Instellingen</h2>
+    <p class="lead">Stel je reeks rondjes in. Gelopen rondjes en eigen afstanden blijven bewaard.</p>
+    <div class="row3">
+      <label class="field"><span>Van (km)</span><input id="sFrom" type="text" inputmode="decimal"></label>
+      <label class="field"><span>Tot (km)</span><input id="sTo" type="text" inputmode="decimal"></label>
+      <label class="field"><span>Stap (km)</span><input id="sStep" type="text" inputmode="decimal"></label>
+    </div>
+    <div class="divider"></div>
+    <label class="field"><span>Jouw tempo (min per km), voor de geschatte tijd</span><input id="sPace" type="text" inputmode="decimal" placeholder="6:00"></label>
+    <p class="hint" id="settingsHint"></p>
+    <div class="modal-actions">
+      <button class="btn" id="settingsCancel" type="button">Annuleer</button>
+      <button class="btn primary" type="submit">Bewaar</button>
+    </div>
+  </form>
 </div>
 
 <script>
 "use strict";
+// ======================================================================
+// Config
+// ======================================================================
+const BROUTER = "https://brouter.de/brouter";
 const OSRM = "https://routing.openstreetmap.de/routed-foot/route/v1/foot/";
-const STEPS = Array.from({ length: 81 }, (_, i) => i + 6);   // 6 = 3,0 km … 86 = 43,0 km
-const KEY = "rondjes.v1";
-const TOLERANCE = 80;        // metres
-const MAX_ITER = 8;
+const KEY = "rondjes.v2";
+const TOLERANCE = 100;          // metres
+const MIN_KM = 1, MAX_KM = 60;
 
-// ---------- state ----------
-let state = { home: null, homeName: "", loops: {}, done: {}, factor: 1.3, sel: null };
-try { const s = JSON.parse(localStorage.getItem(KEY)); if (s) state = Object.assign(state, s); } catch (e) {}
+// BRouter profile: prefer paths/tracks, forest and water; avoid built-up areas, noise and big roads.
+const PROFILE = `---context:global
+assign validForFoot   = true
+assign validForBikes  = false
+assign validForCars   = false
+assign turnInstructionMode = 0
+assign processUnusedTags = false
+assign downhillcost = 0
+assign uphillcost = 0
+
+---context:way
+assign forbidden = or highway= or highway=motorway|motorway_link|trunk|trunk_link|construction|proposed or foot=no|private access=no|private
+assign base = switch highway=path|footway|track|bridleway 1.3
+              switch highway=pedestrian|living_street|cycleway 1.6
+              switch highway=steps 1.9
+              switch highway=residential|service|unclassified|road 2.0
+              switch highway=tertiary|tertiary_link 2.8
+              switch highway=secondary|secondary_link 3.6
+              switch highway=primary|primary_link 4.5 3.0
+assign surfacebonus = switch surface=unpaved|ground|dirt|grass|gravel|fine_gravel|compacted|earth|sand 0.9 1.0
+assign forest = switch estimated_forest_class=5|6 0.62 switch estimated_forest_class=3|4 0.75 switch estimated_forest_class=1|2 0.88 1.0
+assign river = switch estimated_river_class=4|5|6 0.85 switch estimated_river_class=1|2|3 0.93 1.0
+assign town = switch estimated_town_class=5|6 1.7 switch estimated_town_class=3|4 1.4 switch estimated_town_class=1|2 1.15 1.0
+assign noise = switch estimated_noise_class=5|6 1.5 switch estimated_noise_class=3|4 1.25 1.0
+assign costfactor = if forbidden then 10000 else max 1 multiply base multiply surfacebonus multiply forest multiply river multiply town noise
+assign uphillcostfactor = costfactor
+assign downhillcostfactor = costfactor
+
+---context:node
+assign initialcost = 0
+`;
+
+// ======================================================================
+// State
+// ======================================================================
+let state = {
+  home: null, homeName: "",
+  series: { from: 3, to: 43, step: 0.5 },
+  custom: [], loops: {}, done: {},
+  factor: 1.35, sel: null, pace: 6, tiles: "map"
+};
+(function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s) { state = Object.assign(state, s); return; }
+    // migrate v1 (home + finished runs)
+    const v1 = JSON.parse(localStorage.getItem("rondjes.v1"));
+    if (v1) {
+      state.home = v1.home; state.homeName = v1.homeName || "";
+      for (const [step, ts] of Object.entries(v1.done || {})) state.done[+step * 500] = ts;
+    }
+  } catch (e) {}
+})();
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); }
   catch (e) { setStatus("Opslaan mislukt: de opslag van je browser is vol.", true); }
 }
 
-const km = s => s / 2;
-const fmt = (v, d = 1) => v.toLocaleString("nl-NL", { minimumFractionDigits: d, maximumFractionDigits: d });
-const label = s => fmt(km(s)) + " km";
-const nextStep = () => STEPS.find(s => !state.done[s]) ?? null;
+// ======================================================================
+// Helpers
+// ======================================================================
 const $ = id => document.getElementById(id);
+const fmt = (v, d = 1) => v.toLocaleString("nl-NL", { minimumFractionDigits: d, maximumFractionDigits: d });
+const kmLabel = m => fmt(m / 1000, (m % 100 === 0) ? 1 : 2);
+const parseNum = s => { const v = parseFloat(String(s).trim().replace(",", ".")); return isFinite(v) ? v : NaN; };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function seriesList() {
+  const { from, to, step } = state.series, out = [];
+  for (let i = 0; ; i++) {
+    const km = from + i * step;
+    if (km > to + 1e-9 || out.length > 300) break;
+    out.push(Math.round(km * 1000));
+  }
+  return out;
+}
+function allDistances() { return [...new Set([...seriesList(), ...state.custom])].sort((a, b) => a - b); }
+const isCustom = m => !seriesList().includes(m);
+const nextDistance = () => seriesList().find(m => !state.done[m]) ?? null;
+function formatDuration(min) {
+  const h = Math.floor(min / 60), mm = Math.round(min % 60);
+  return h ? `${h}:${String(mm).padStart(2, "0")} u` : `${mm} min`;
+}
+function parsePace(s) {
+  s = String(s).trim();
+  if (/^\d{1,2}[:.]\d{1,2}$/.test(s) && s.includes(":")) { const [a, b] = s.split(":").map(Number); return a + b / 60; }
+  return parseNum(s);
+}
+const paceText = p => `${Math.floor(p)}:${String(Math.round((p % 1) * 60)).padStart(2, "0")}`;
 
 // ---------- geo ----------
 function destination([lat, lon], dist, brg) {
@@ -260,8 +513,16 @@ function destination([lat, lon], dist, brg) {
 }
 function circlePoints(home, radius, bearing, n = 4) {
   const center = destination(home, radius, bearing);
-  const homeAngle = bearing + 180;
-  return Array.from({ length: n }, (_, i) => destination(center, radius, homeAngle + (i + 1) * 360 / (n + 1)));
+  return Array.from({ length: n }, (_, i) => destination(center, radius, bearing + 180 + (i + 1) * 360 / (n + 1)));
+}
+function encodePolyline(pts) {
+  let out = "", pLat = 0, pLon = 0;
+  const enc = v => { v = v < 0 ? ~(v << 1) : (v << 1); let s = ""; while (v >= 32) { s += String.fromCharCode((32 | (v & 31)) + 63); v >>= 5; } return s + String.fromCharCode(v + 63); };
+  for (const [la, lo] of pts) {
+    const a = Math.round(la * 1e5), b = Math.round(lo * 1e5);
+    out += enc(a - pLat) + enc(b - pLon); pLat = a; pLon = b;
+  }
+  return out;
 }
 function decodePolyline(str) {
   const out = []; let i = 0, lat = 0, lon = 0;
@@ -276,175 +537,509 @@ function decodePolyline(str) {
   }
   return out;
 }
-
-// ---------- routing ----------
-let lastRequest = 0;
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-async function route(points) {
-  const wait = lastRequest + 1100 - Date.now();      // be gentle with the free server
-  if (wait > 0) await sleep(wait);
-  lastRequest = Date.now();
-  const coords = points.map(([la, lo]) => lo.toFixed(6) + "," + la.toFixed(6)).join(";");
-  const res = await fetch(OSRM + coords + "?overview=full&geometries=polyline&steps=false");
-  if (res.status === 429) { await sleep(5000); return route(points); }
-  const data = await res.json();
-  if (data.code !== "Ok" || !data.routes?.length) throw new Error(data.message || data.code || "Geen route");
-  return { meters: data.routes[0].distance, poly: data.routes[0].geometry };
+function haversine(a, b) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * toR, dLon = (b[1] - a[1]) * toR;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * toR) * Math.cos(b[0] * toR) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-async function makeLoop(step, bearing, onProgress) {
-  const target = km(step) * 1000;
+
+// ======================================================================
+// Land cover: read the colours of OpenStreetMap map tiles (zoom 12) around home.
+// Grey/pink/purple = built-up, greens/blue = nature, farmland or water.
+// ======================================================================
+const LC_Z = 12, LC_BLOCK = 2, LC_N = 256 / LC_BLOCK;            // 128×128 cells of ~2 px (≈ 50 m)
+const URBAN = 1, GREEN = 2;
+const PALETTE = [
+  [224,223,223,URBAN],[242,218,217,URBAN],[255,214,209,URBAN],[235,219,232,URBAN],[223,221,206,URBAN],
+  [199,199,180,URBAN],[217,208,201,URBAN],[255,255,229,URBAN],[238,238,238,URBAN],[230,214,206,URBAN],
+  [173,209,158,GREEN],[200,250,204,GREEN],[205,235,176,GREEN],[238,240,213,GREEN],[174,223,163,GREEN],
+  [200,215,171,GREEN],[214,217,159,GREEN],[201,225,191,GREEN],[170,203,175,GREEN],[222,246,192,GREEN],
+  [223,252,226,GREEN],[170,211,223,GREEN],[245,233,198,GREEN],[199,230,169,GREEN],[211,237,187,GREEN],
+  [165,213,139,GREEN],[157,202,138,GREEN]
+];
+const lcTiles = new Map();      // "x/y" -> Uint8Array | null (failed) | Promise
+function classify(r, g, b) {
+  let best = 0, bd = 13 * 13;
+  for (const [pr, pg, pb, c] of PALETTE) {
+    const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+function worldPx([lat, lon], z = LC_Z) {
+  const n = 256 * 2 ** z, s = Math.sin(lat * Math.PI / 180);
+  return [(lon + 180) / 360 * n, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n];
+}
+async function loadTile(x, y) {
+  const res = await fetch(`https://tile.openstreetmap.org/${LC_Z}/${x}/${y}.png`, { mode: "cors" });
+  if (!res.ok) throw new Error("tile " + res.status);
+  const bmp = await createImageBitmap(await res.blob());
+  const cv = document.createElement("canvas"); cv.width = cv.height = 256;
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(bmp, 0, 0);
+  const px = ctx.getImageData(0, 0, 256, 256).data;
+  const cells = new Uint8Array(LC_N * LC_N);
+  for (let cy = 0; cy < LC_N; cy++) for (let cx = 0; cx < LC_N; cx++) {
+    let u = 0, g = 0;
+    for (let dy = 0; dy < LC_BLOCK; dy++) for (let dx = 0; dx < LC_BLOCK; dx++) {
+      const i = ((cy * LC_BLOCK + dy) * 256 + cx * LC_BLOCK + dx) * 4;
+      const c = classify(px[i], px[i + 1], px[i + 2]);
+      if (c === URBAN) u++; else if (c === GREEN) g++;
+    }
+    cells[cy * LC_N + cx] = u > g ? URBAN : g > u ? GREEN : 0;
+  }
+  return cells;
+}
+async function ensureLandcover(center, radiusM) {
+  const mPerPx = 156543.03 * Math.cos(center[0] * Math.PI / 180) / 2 ** LC_Z;
+  const [cx, cy] = worldPx(center), r = radiusM / mPerPx;
+  const x0 = Math.floor((cx - r) / 256), x1 = Math.floor((cx + r) / 256);
+  const y0 = Math.floor((cy - r) / 256), y1 = Math.floor((cy + r) / 256);
+  if ((x1 - x0 + 1) * (y1 - y0 + 1) > 36) return false;
+  const jobs = [];
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+    const k = x + "/" + y;
+    if (!lcTiles.has(k)) lcTiles.set(k, loadTile(x, y).then(c => (lcTiles.set(k, c), c)).catch(() => (lcTiles.set(k, null), null)));
+    jobs.push(lcTiles.get(k));
+  }
+  const res = await Promise.all(jobs);
+  return res.filter(Boolean).length >= Math.ceil(res.length * 0.7);
+}
+function cellAt(gx, gy) {
+  const tx = Math.floor(gx / LC_N), ty = Math.floor(gy / LC_N);
+  const t = lcTiles.get(tx + "/" + ty);
+  if (!(t instanceof Uint8Array)) return -1;
+  return t[(gy - ty * LC_N) * LC_N + (gx - tx * LC_N)];
+}
+// land cover around a point: majority of the 5×5 cells (≈ 250 m) ignoring roads/labels
+function coverAt(ll) {
+  const [px, py] = worldPx(ll), gx = Math.floor(px / LC_BLOCK), gy = Math.floor(py / LC_BLOCK);
+  let u = 0, g = 0, known = false;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const c = cellAt(gx + dx, gy + dy);
+    if (c >= 0) known = true;
+    if (c === URBAN) u++; else if (c === GREEN) g++;
+  }
+  if (!known) return -1;
+  return u > g ? URBAN : g > u ? GREEN : 0;
+}
+// share of green / built-up along a line, sampled every ~60 m
+function coverAlong(pts) {
+  let u = 0, g = 0, n = 0, acc = 60;
+  for (let i = 1; i < pts.length; i++) {
+    acc += haversine(pts[i - 1], pts[i]);
+    if (acc < 60) continue;
+    acc = 0;
+    const c = coverAt(pts[i]);
+    if (c < 0) continue;
+    n++; if (c === URBAN) u++; else if (c === GREEN) g++;
+  }
+  return n ? { green: g / n, urban: u / n } : { green: null, urban: null };
+}
+function circleCover(home, radius, bearing) {
+  const center = destination(home, radius, bearing), pts = [];
+  for (let i = 0; i <= 48; i++) pts.push(destination(center, radius, bearing + 180 + i * 7.5));
+  return coverAlong(pts);
+}
+
+// ======================================================================
+// Routing
+// ======================================================================
+let profileId = null, lastRequest = 0;
+async function polite() {
+  const wait = lastRequest + 1000 - Date.now();
+  if (wait > 0) await sleep(wait);
+  lastRequest = Date.now();
+}
+async function ensureProfile() {
+  if (profileId) return profileId;
+  await polite();
+  const res = await fetch(BROUTER + "/profile", { method: "POST", headers: { "Content-Type": "text/plain" }, body: PROFILE });
+  const data = await res.json();
+  if (!data.profileid || data.error) throw new Error(data.error || "profiel niet geaccepteerd");
+  return (profileId = data.profileid);
+}
+function analyse(messages) {
+  if (!Array.isArray(messages) || messages.length < 2) return { green: null, urban: null };
+  const h = messages[0], iD = h.indexOf("Distance"), iT = h.indexOf("WayTags");
+  let tot = 0, green = 0, urban = 0;
+  for (const row of messages.slice(1)) {
+    const d = +row[iD] || 0, t = row[iT] || "";
+    tot += d;
+    const town = /estimated_town_class=[3-6]/.test(t);
+    if (town) urban += d;
+    else if (/estimated_forest_class=[2-6]|estimated_river_class=[3-6]/.test(t) || /highway=(path|track|bridleway)/.test(t)) green += d;
+  }
+  return tot ? { green: green / tot, urban: urban / tot } : { green: null, urban: null };
+}
+async function brouter(points, retry = true) {
+  const id = await ensureProfile();
+  await polite();
+  const lonlats = points.map(([la, lo]) => lo.toFixed(6) + "," + la.toFixed(6)).join("|");
+  const res = await fetch(`${BROUTER}?lonlats=${lonlats}&profile=${id}&alternativeidx=0&format=geojson`);
+  if (!res.ok) {
+    const text = await res.text();
+    if (retry && /profile/i.test(text)) { profileId = null; return brouter(points, false); }
+    throw new Error(text.trim().slice(0, 120) || "HTTP " + res.status);
+  }
+  const data = await res.json();
+  const f = data.features && data.features[0];
+  if (!f) throw new Error("Geen route");
+  const coords = f.geometry.coordinates;
+  return {
+    meters: +f.properties["track-length"],
+    ascend: +f.properties["filtered ascend"] || 0,
+    pts: coords.map(c => [c[1], c[0]]),
+    ele: coords.map(c => c[2]),
+    ...analyse(f.properties.messages),
+    router: "brouter"
+  };
+}
+async function osrm(points) {
+  await polite();
+  const coords = points.map(([la, lo]) => lo.toFixed(6) + "," + la.toFixed(6)).join(";");
+  const res = await fetch(OSRM + coords + "?overview=full&geometries=polyline&steps=false");
+  const data = await res.json();
+  if (data.code !== "Ok" || !data.routes?.length) throw new Error(data.message || data.code || "Geen route");
+  return { meters: data.routes[0].distance, ascend: null, pts: decodePolyline(data.routes[0].geometry), ele: null, green: null, urban: null, router: "osrm" };
+}
+let brouterDown = 0;
+const ROUTING_FAIL = /island|not mapped|no track|not found|no route|operation killed/i;
+async function route(points, forceOsrm = false) {
+  if (!forceOsrm && brouterDown < 3) {
+    try { const r = await brouter(points); brouterDown = 0; return r; }
+    catch (e) {
+      if (ROUTING_FAIL.test(e.message)) throw e;     // this set of points can't be routed; try other points
+      console.warn("BRouter:", e.message);
+      brouterDown++;
+    }
+  }
+  return osrm(points);   // fallback: a fine running route, just not nature-optimised
+}
+const score = r => (r.green ?? 0) - 1.5 * (r.urban ?? 0);
+
+async function makeLoop(target, baseBearing, onProgress, avoidBearing = null) {
   const home = state.home;
   let radius = target / (2 * Math.PI * state.factor);
-  let best = null, fails = 0;
-  for (let i = 0; i < MAX_ITER; i++) {
-    onProgress && onProgress(`Route zoeken, poging ${i + 1}…`);
-    let r;
-    try { r = await route([home, ...circlePoints(home, radius, bearing), home]); }
-    catch (e) {
-      if (++fails > 3) throw e;
-      bearing += 47; i--; continue;            // e.g. a point in water: turn a bit
-    }
-    if (!best || Math.abs(r.meters - target) < Math.abs(best.meters - target)) best = { ...r, bearing };
-    // learn how much longer roads are than the ideal circle, for the next loops
-    state.factor = 0.7 * state.factor + 0.3 * (r.meters / (2 * Math.PI * radius));
-    if (Math.abs(r.meters - target) <= TOLERANCE) break;
-    radius *= Math.pow(target / r.meters, 0.9);
+  const learn = (r, rad) => { state.factor = Math.min(2.2, Math.max(1, 0.75 * state.factor + 0.25 * (r.meters / (2 * Math.PI * rad)))); };
+  const angDiff = (a, b) => Math.abs(((a - b) % 360 + 540) % 360 - 180);
+
+  // 0) read the landscape around home and rank 16 directions by how green the loop would be
+  onProgress("Natuur rond je huis bekijken…");
+  let lcOK = false;
+  try { lcOK = await ensureLandcover(home, radius * 2.6 + 1500); } catch (e) {}
+  let order;
+  if (lcOK) {
+    const ranked = Array.from({ length: 16 }, (_, k) => {
+      const brg = (baseBearing + k * 22.5) % 360, c = circleCover(home, radius, brg);
+      return { brg, s: (c.green ?? 0) - 1.5 * (c.urban ?? 0) };
+    }).filter(c => avoidBearing == null || angDiff(c.brg, avoidBearing) > 30).sort((a, b) => b.s - a.s);
+    order = [];
+    for (const c of ranked) if (order.every(o => angDiff(o, c.brg) >= 45)) order.push(c.brg);
+  } else {
+    order = [0, 90, 180, 270, 45, 135, 225, 315].map(o => (baseBearing + o) % 360);
+    if (avoidBearing != null) order = order.filter(b => angDiff(b, avoidBearing) > 30);
   }
-  if (!best) throw new Error("Geen route gevonden");
-  return { meters: best.meters, poly: best.poly, bearing: best.bearing, at: Date.now() };
+  const rate = r => { const c = lcOK ? coverAlong(r.pts) : { green: r.green, urban: r.urban }; r.green = c.green; r.urban = c.urban; return r; };
+
+  // 1) route the 4 most promising directions and keep the greenest real route
+  const routed = [];
+  for (let pass = 0; pass < 2 && !routed.length; pass++) {
+    const forceOsrm = pass === 1;              // nature planner unavailable: plain walking routes
+    for (const brg of order) {
+      if (routed.length >= 4) break;
+      onProgress(forceOsrm ? "Gewone looproute zoeken…" : `Groenste richting zoeken (${routed.length + 1}/4)…`);
+      try {
+        const r = rate(await route([home, ...circlePoints(home, radius, brg), home], forceOsrm));
+        r.bearing = brg; r.radius = radius; r.forceOsrm = forceOsrm; learn(r, radius);
+        routed.push(r);
+      } catch (e) { console.warn("route:", e.message); }
+      if (forceOsrm && routed.length) break;
+    }
+  }
+  if (!routed.length) throw new Error("geen begaanbare paden rond je huis gevonden");
+  // prefer the greenest; among nearly-as-green options rotate per distance for some variety
+  routed.sort((a, b) => score(b) - score(a));
+  const good = routed.filter(r => score(r) >= score(routed[0]) - 0.06);
+  const chosen = good[Math.round(target / 500) % good.length];
+
+  // 2) tune the size of the loop until the length fits. Routes jump between path variants, so keep the
+  //    closest too-short and too-long attempt, interpolate between them and nudge the direction a little.
+  let best = chosen, cur = chosen, lo = null, hi = null;
+  const note = r => {
+    if (r.meters < target) { if (!lo || r.meters > lo.meters) lo = r; }
+    else if (!hi || r.meters < hi.meters) hi = r;
+  };
+  note(chosen);
+  const jitter = [0, 0, 7, -7, 14, -14, 21, -21, 28, -28];
+  for (let i = 0; i < 10 && Math.abs(best.meters - target) > TOLERANCE; i++) {
+    onProgress(`Afstand afstemmen (nu ${kmLabel(Math.round(best.meters))} km)…`);
+    let rad = (lo && hi && hi.radius !== lo.radius)
+      ? lo.radius + (target - lo.meters) * (hi.radius - lo.radius) / (hi.meters - lo.meters)
+      : cur.radius * Math.pow(target / cur.meters, 0.9);
+    if (!isFinite(rad) || rad <= 0) rad = cur.radius * Math.pow(target / cur.meters, 0.9);
+    if (cur.failed) rad *= 1.06;
+    const brg = (chosen.bearing + jitter[i] + 360) % 360;
+    try {
+      const r = rate(await route([home, ...circlePoints(home, rad, brg), home], chosen.forceOsrm));
+      r.bearing = brg; r.radius = rad; cur = r; learn(r, rad); note(r);
+      if (Math.abs(r.meters - target) < Math.abs(best.meters - target)) best = r;
+    } catch (e) { cur = { ...cur, radius: rad, failed: true }; }
+  }
+  return pack(best);
+}
+function pack(r) {
+  // elevation profile: 80 samples along the route
+  let elev = null;
+  if (r.ele && r.ele.every(v => typeof v === "number")) {
+    const cum = [0];
+    for (let i = 1; i < r.pts.length; i++) cum.push(cum[i - 1] + haversine(r.pts[i - 1], r.pts[i]));
+    const total = cum[cum.length - 1] || 1; elev = [];
+    for (let s = 0, j = 0; s < 80; s++) {
+      const d = total * s / 79;
+      while (j < cum.length - 2 && cum[j + 1] < d) j++;
+      elev.push(Math.round(r.ele[j] * 10) / 10);
+    }
+  }
+  return {
+    meters: Math.round(r.meters), poly: encodePolyline(r.pts), elev, ascend: r.ascend,
+    green: r.green, urban: r.urban, bearing: r.bearing, router: r.router, at: Date.now()
+  };
 }
 
 const busy = new Set();
-async function generate(step, random = false) {
-  if (!state.home || busy.has(step)) return;
-  busy.add(step); renderGrid(); if (step === state.sel) renderCard();
-  const bearing = random ? Math.random() * 360 : (step * 137.508) % 360;
+async function generate(m, another = false) {
+  if (!state.home || busy.has(m)) return;
+  busy.add(m); renderGrid(); if (m === state.sel) renderCard();
+  const prev = state.loops[m];
+  const base = another ? Math.random() * 360 : (m / 500 * 137.508) % 360;
+  const homeAtStart = state.home;
   try {
-    const homeAtStart = state.home;
-    const loop = await makeLoop(step, bearing, msg => { if (step === state.sel) setStatus(msg); });
-    if (state.home !== homeAtStart) return;      // home changed meanwhile: drop this route
-    state.loops[step] = loop; save();
-    if (step === state.sel) setStatus("");
+    const loop = await makeLoop(m, base, msg => { if (m === state.sel) setStatus(msg, false, true); }, another ? prev?.bearing ?? null : null);
+    if (state.home !== homeAtStart) return;
+    state.loops[m] = loop; save();
+    if (m === state.sel) setStatus(loop.router === "osrm" ? "De natuurplanner was even niet bereikbaar; dit is een gewone looproute." : "");
   } catch (e) {
-    if (step === state.sel) setStatus("Geen route gevonden (" + e.message + "). Probeer ‘Andere route’.", true);
+    if (m === state.sel) setStatus("Geen route gevonden (" + e.message + "). Probeer ‘Andere’.", true);
   } finally {
-    busy.delete(step); renderGrid(); renderProgress();
-    if (step === state.sel) { renderCard(); drawRoute(); }
+    busy.delete(m); renderGrid(); renderProgress();
+    if (m === state.sel) { renderCard(); drawRoute(true); }
   }
 }
 
-// ---------- map ----------
+// ======================================================================
+// Map
+// ======================================================================
 const map = L.map("map", { zoomControl: false, attributionControl: true });
-L.control.zoom({ position: "bottomright" }).addTo(map);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19, attribution: "© OpenStreetMap"
-}).addTo(map);
+map.attributionControl.setPrefix(false);
+const TILES = {
+  map: () => L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    { maxZoom: 19, attribution: "© OpenStreetMap", className: "tiles-soft" }),
+  terrain: () => L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    { maxZoom: 17, subdomains: "abc", attribution: "© OpenStreetMap © OpenTopoMap", className: "tiles-topo" })
+};
+let tileLayer = null;
+function setTiles(kind) {
+  state.tiles = kind; save();
+  if (tileLayer) tileLayer.remove();
+  tileLayer = TILES[kind]().addTo(map);
+  $("tilesMap").setAttribute("aria-pressed", kind === "map");
+  $("tilesTerrain").setAttribute("aria-pressed", kind === "terrain");
+}
 map.setView([52.1, 5.3], 7);
-let homeMarker = null, routeLine = null;
-const homeIcon = L.divIcon({ className: "", html: '<div class="home-pin">⌂</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
 
+let homeMarker = null, routeCasing = null, routeLine = null;
+const homeIcon = L.divIcon({ className: "", html: '<div class="home-pin"><svg><use href="#i-home"/></svg></div>', iconSize: [34, 34], iconAnchor: [17, 17] });
 function drawHome() {
   if (homeMarker) homeMarker.remove();
-  if (state.home) homeMarker = L.marker(state.home, { icon: homeIcon, zIndexOffset: 1000 }).addTo(map);
+  if (state.home) homeMarker = L.marker(state.home, { icon: homeIcon, zIndexOffset: 1000, keyboard: false }).addTo(map);
 }
-function drawRoute() {
-  if (routeLine) { routeLine.remove(); routeLine = null; }
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function drawRoute(animate = false) {
+  [routeCasing, routeLine].forEach(l => l && l.remove());
+  routeCasing = routeLine = null;
   const loop = state.loops[state.sel];
-  if (loop) {
-    const color = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#ff5a1f";
-    routeLine = L.polyline(decodePolyline(loop.poly), { color, weight: 5, opacity: .9, lineJoin: "round" }).addTo(map);
-    map.fitBounds(routeLine.getBounds(), { paddingTopLeft: [20, 20], paddingBottomRight: [20, 44], animate: false });
-  } else if (state.home) {
-    map.setView(state.home, 14);
+  if (!loop) { if (state.home) map.setView(state.home, 14, { animate: false }); return; }
+  const pts = decodePolyline(loop.poly);
+  routeCasing = L.polyline(pts, { color: "#ffffff", weight: 9, opacity: .85, lineJoin: "round", lineCap: "round", interactive: false }).addTo(map);
+  routeLine = L.polyline(pts, { color: cssVar("--sun") || "#ff6b2c", weight: 5, opacity: 1, lineJoin: "round", lineCap: "round", interactive: false }).addTo(map);
+  const pb = $("map").offsetHeight > 400 ? 90 : 70;
+  map.fitBounds(routeLine.getBounds(), { paddingTopLeft: [24, 76], paddingBottomRight: [24, pb], animate: false });
+  if (homeMarker) homeMarker.setZIndexOffset(1000);
+  if (animate && !reduceMotion()) {
+    for (const l of [routeCasing, routeLine]) {
+      const p = l.getElement && l.getElement(); if (!p || !p.getTotalLength) continue;
+      const len = p.getTotalLength();
+      p.style.strokeDasharray = len; p.style.strokeDashoffset = len;
+      p.getBoundingClientRect();
+      p.classList.add("route-anim"); p.style.strokeDashoffset = 0;
+      setTimeout(() => { p.style.strokeDasharray = ""; p.classList.remove("route-anim"); }, 1800);
+    }
   }
 }
+map.on("zoomend", () => { /* clear any leftover dash styles after zoom */
+  for (const l of [routeCasing, routeLine]) { const p = l && l.getElement && l.getElement(); if (p) { p.style.strokeDasharray = ""; p.style.strokeDashoffset = ""; } }
+});
 
-// ---------- rendering ----------
-function setStatus(msg, err = false) { const el = $("status"); el.textContent = msg; el.classList.toggle("err", err); }
-
+// ======================================================================
+// Rendering
+// ======================================================================
+function setStatus(msg, err = false, spin = false) {
+  const el = $("status");
+  el.textContent = "";
+  if (spin) { const s = document.createElement("span"); s.className = "spinner"; el.appendChild(s); }
+  el.appendChild(document.createTextNode(msg));
+  el.classList.toggle("err", err);
+}
 function renderHeader() { $("homeName").textContent = state.home ? (state.homeName || "Thuis") : "Thuis instellen"; }
 
 function renderCard() {
-  const s = state.sel, loop = state.loops[s], done = !!state.done[s];
-  $("selTitle").textContent = s ? label(s) : "–";
-  $("selBadge").hidden = !done;
-  if (done) $("selBadge").textContent = "Gelopen " + new Date(state.done[s]).toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
-  $("stRoute").textContent = loop ? fmt(loop.meters / 1000, 2) + " km" : "–";
-  if (loop) {
-    const d = Math.round(loop.meters - km(s) * 1000);
-    $("stDiff").textContent = (d >= 0 ? "+" : "−") + Math.abs(d) + " m";
-    const min = Math.round(loop.meters / 1000 * 6);
-    $("stTime").textContent = Math.floor(min / 60) + ":" + String(min % 60).padStart(2, "0") + " u";
-  } else { $("stDiff").textContent = "–"; $("stTime").textContent = "–"; }
-  const doneBtn = $("doneBtn");
-  doneBtn.textContent = done ? "✓ Gelopen" : "Markeer als gelopen";
-  doneBtn.classList.toggle("done", done); doneBtn.classList.toggle("primary", !done);
-  doneBtn.disabled = !s;
-  $("regenBtn").disabled = !s || !state.home || busy.has(s);
-  $("regenBtn").textContent = loop ? "↻ Andere route" : "Maak route";
+  const m = state.sel, loop = state.loops[m], done = !!state.done[m];
+  $("selTitle").innerHTML = m ? `${kmLabel(m)}<small>km</small>` : "–";
+  $("tagDone").hidden = !done;
+  if (done) $("tagDone").textContent = "Gelopen " + new Date(state.done[m]).toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+  $("tagCustom").hidden = !m || !isCustom(m);
+  $("removeCustom").hidden = !m || !state.custom.includes(m) || !isCustom(m);
+  $("selEyebrow").textContent = state.homeName ? `Rondje vanaf ${state.homeName}` : "Rondje vanaf huis";
+
+  const g = loop?.green, u = loop?.urban;
+  if (loop && g != null) {
+    const gp = Math.round(g * 100), up = Math.round(u * 100);
+    $("barG").style.width = gp + "%"; $("barU").style.width = up + "%"; $("barO").style.width = Math.max(0, 100 - gp - up) + "%";
+    $("pctG").textContent = gp + "%"; $("pctU").textContent = up + "%";
+  } else {
+    $("barG").style.width = $("barU").style.width = $("barO").style.width = "0";
+    $("pctG").textContent = $("pctU").textContent = "–";
+  }
+  $("stRoute").innerHTML = loop ? `${fmt(loop.meters / 1000, 2)}<small>km</small>` : "–";
+  const diff = loop ? loop.meters - m : 0;
+  $("stDiff").textContent = loop ? (Math.abs(diff) < 1 ? "precies" : `${diff > 0 ? "+" : "−"}${Math.abs(diff)} m`) : "\u00a0";
+  $("stTime").textContent = loop ? formatDuration(loop.meters / 1000 * state.pace) : "–";
+  $("stPace").textContent = `bij ${paceText(state.pace)}/km`;
+  $("stAsc").innerHTML = loop && loop.ascend != null ? `${Math.round(loop.ascend)}<small>m</small>` : "–";
+  $("stElev").textContent = loop && loop.elev ? `${Math.round(Math.min(...loop.elev))}–${Math.round(Math.max(...loop.elev))} m hoog` : "\u00a0";
+  renderElevation(loop);
+
+  const db = $("doneBtn");
+  db.querySelector("span").textContent = done ? "Gelopen" : "Afvinken";
+  db.classList.toggle("done", done); db.classList.toggle("primary", !done);
+  db.disabled = !m;
+  $("regenBtn").disabled = !m || !state.home || busy.has(m);
+  $("regenBtn").querySelector("span").textContent = loop ? "Andere" : "Maak";
   $("gpxBtn").disabled = !loop;
-  if (busy.has(s) && !$("status").textContent) setStatus("Route zoeken…");
+  if (busy.has(m) && !$("status").textContent) setStatus("Route zoeken…", false, true);
+}
+
+function renderElevation(loop) {
+  const box = $("elev");
+  if (!loop || !loop.elev || loop.elev.length < 2) { box.innerHTML = ""; box.hidden = true; return; }
+  box.hidden = false;
+  const raw = loop.elev;
+  const e = raw.map((_, i) => { const w = raw.slice(Math.max(0, i - 2), i + 3); return w.reduce((a, b) => a + b, 0) / w.length; });
+  const min = Math.min(...e), max = Math.max(...e), span = Math.max(max - min, 25);
+  const W = 300, H = 46, top = 4;
+  const pts = e.map((v, i) => [i / (e.length - 1) * W, top + (1 - (v - min) / span) * (H - top)]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const sun = cssVar("--sun") || "#ff6b2c";
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H + 8}" preserveAspectRatio="none" role="img" aria-label="Hoogteprofiel">
+    <defs><linearGradient id="eg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${sun}" stop-opacity=".35"/><stop offset="1" stop-color="${sun}" stop-opacity="0"/></linearGradient></defs>
+    <path d="${line} L${W} ${H} L0 ${H} Z" fill="url(#eg)"/>
+    <path d="${line}" fill="none" stroke="${sun}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+  box.setAttribute("title", `Hoogte ${Math.round(min)}–${Math.round(max)} m`);
 }
 
 function renderGrid() {
-  const g = $("grid");
-  if (!g.children.length) {
-    for (const s of STEPS) {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "chip"; b.dataset.step = s;
-      b.innerHTML = `<b>${fmt(km(s))}</b><small>km</small>`;
-      b.addEventListener("click", () => select(s));
-      g.appendChild(b);
+  const wrap = $("bands"), list = allDistances();
+  const sig = list.join(",");
+  if (wrap.dataset.sig !== sig) {
+    wrap.dataset.sig = sig; wrap.innerHTML = "";
+    const groups = new Map();
+    for (const m of list) { const b = Math.floor(m / 5000); if (!groups.has(b)) groups.set(b, []); groups.get(b).push(m); }
+    for (const [b, ms] of groups) {
+      const band = document.createElement("div"); band.className = "band";
+      const h = document.createElement("h3");
+      h.textContent = b === 0 ? "Tot 5 km" : `${b * 5} – ${b * 5 + 5} km`;
+      const grid = document.createElement("div"); grid.className = "grid";
+      for (const m of ms) {
+        const c = document.createElement("button");
+        c.type = "button"; c.className = "chip"; c.dataset.m = m;
+        c.innerHTML = `<b>${kmLabel(m)}</b><small>km</small><span class="meter"><i></i></span>`;
+        c.addEventListener("click", () => select(m, true));
+        grid.appendChild(c);
+      }
+      band.append(h, grid); wrap.appendChild(band);
     }
   }
-  for (const b of g.children) {
-    const s = +b.dataset.step;
-    b.classList.toggle("done", !!state.done[s]);
-    b.classList.toggle("gen", !!state.loops[s] && !state.done[s]);
-    b.classList.toggle("sel", s === state.sel);
-    b.classList.toggle("busy", busy.has(s));
-    b.querySelector("small").textContent = busy.has(s) ? "bezig…" : "km";
-    b.setAttribute("aria-label", label(s) + (state.done[s] ? ", gelopen" : state.loops[s] ? ", route klaar" : ""));
+  for (const c of wrap.querySelectorAll(".chip")) {
+    const m = +c.dataset.m, loop = state.loops[m];
+    c.classList.toggle("done", !!state.done[m]);
+    c.classList.toggle("sel", m === state.sel);
+    c.classList.toggle("busy", busy.has(m));
+    c.classList.toggle("custom", isCustom(m));
+    c.querySelector("small").textContent = busy.has(m) ? "bezig…" : "km";
+    const meter = c.querySelector(".meter");
+    meter.hidden = !loop;
+    meter.firstChild.style.width = loop && loop.green != null ? Math.round(loop.green * 100) + "%" : "0";
+    c.setAttribute("aria-label", `${kmLabel(m)} km` + (state.done[m] ? ", gelopen" : "") + (loop && loop.green != null ? `, ${Math.round(loop.green * 100)}% groen` : ""));
   }
 }
 
 function renderProgress() {
-  const n = Object.keys(state.done).length;
-  $("progBar").style.width = (n / STEPS.length * 100) + "%";
-  $("progText").textContent = `${n} van ${STEPS.length} gelopen`;
-  const total = Object.keys(state.done).reduce((t, s) => t + (state.loops[s]?.meters ?? km(+s) * 1000), 0);
-  $("progKm").textContent = fmt(total / 1000) + " km totaal";
-  const made = STEPS.filter(s => state.loops[s]).length;
+  const series = seriesList();
+  const n = series.filter(m => state.done[m]).length;
+  const pct = series.length ? n / series.length : 0;
+  $("ringVal").style.strokeDashoffset = (263.9 * (1 - pct)).toFixed(1);
+  $("ringPct").textContent = Math.round(pct * 100) + "%";
+  $("progTitle").textContent = `${n} van ${series.length} rondjes`;
+  const total = Object.keys(state.done).reduce((t, m) => t + (state.loops[m]?.meters ?? +m), 0);
+  $("progSub").textContent = `${fmt(total / 1000)} km gelopen in totaal`;
+  const next = nextDistance();
+  $("nextBtn").hidden = next == null;
+  if (next != null) $("nextBtn").textContent = `Volgende: ${kmLabel(next)} km →`;
+  const made = series.filter(m => state.loops[m]).length;
   const bb = $("batchBtn");
-  if (batchRunning) bb.textContent = `Stop met routes maken (${made}/${STEPS.length})`;
-  else bb.textContent = made === STEPS.length ? "Alle routes zijn klaar" : `Maak alle routes alvast (${made}/${STEPS.length} klaar)`;
-  bb.disabled = !state.home || (!batchRunning && made === STEPS.length);
+  bb.textContent = batchRunning ? `Stop met routes maken (${made}/${series.length})`
+    : made === series.length ? "Alle routes zijn klaar" : `Maak alle routes alvast (${made}/${series.length} klaar)`;
+  bb.disabled = !state.home || (!batchRunning && made === series.length);
+  const { from, to, step } = state.series;
+  $("seriesLabel").textContent = `${fmt(from)} – ${fmt(to)} km per ${fmt(step)} km`;
 }
-
 function renderAll() { renderHeader(); renderCard(); renderGrid(); renderProgress(); }
 
-function select(s) {
-  state.sel = s; save(); setStatus("");
-  window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-  renderCard(); renderGrid(); drawRoute();
-  if (!state.loops[s]) generate(s);
+function select(m, scroll) {
+  state.sel = m; save(); setStatus("");
+  $("kmInput").value = fmt(m / 1000, m % 100 === 0 ? 1 : 2);
+  renderCard(); renderGrid(); drawRoute(false);
+  if (scroll) window.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" });
+  if (!state.loops[m]) generate(m);
 }
 
-// ---------- actions ----------
+// ======================================================================
+// Actions
+// ======================================================================
 $("doneBtn").addEventListener("click", () => {
-  const s = state.sel; if (!s) return;
-  if (state.done[s]) delete state.done[s]; else state.done[s] = Date.now();
+  const m = state.sel; if (!m) return;
+  if (state.done[m]) delete state.done[m]; else state.done[m] = Date.now();
   save(); renderAll();
 });
 $("regenBtn").addEventListener("click", () => { setStatus(""); generate(state.sel, !!state.loops[state.sel]); });
+$("removeCustom").addEventListener("click", () => {
+  const m = state.sel;
+  state.custom = state.custom.filter(x => x !== m);
+  delete state.loops[m]; delete state.done[m];
+  state.sel = nextDistance() ?? seriesList()[0];
+  save(); renderAll(); drawRoute(false);
+});
 $("gpxBtn").addEventListener("click", async () => {
-  const s = state.sel, loop = state.loops[s]; if (!loop) return;
+  const m = state.sel, loop = state.loops[m]; if (!loop) return;
   const pts = decodePolyline(loop.poly);
-  const name = "Rondje " + label(s);
+  const name = `Rondje ${kmLabel(m)} km`;
   const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Rondjes" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>${name}</name><trkseg>\n` +
     pts.map(([la, lo]) => `<trkpt lat="${la}" lon="${lo}"/>`).join("\n") + `\n</trkseg></trk>\n</gpx>\n`;
-  const fileName = `rondje-${km(s).toFixed(1)}km.gpx`;
+  const fileName = `rondje-${(m / 1000).toFixed(1)}km.gpx`;
   const file = new File([gpx], fileName, { type: "application/gpx+xml" });
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
@@ -454,16 +1049,67 @@ $("gpxBtn").addEventListener("click", async () => {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 });
+$("nextBtn").addEventListener("click", () => { const n = nextDistance(); if (n != null) select(n, true); });
+$("tilesMap").addEventListener("click", () => setTiles("map"));
+$("tilesTerrain").addEventListener("click", () => setTiles("terrain"));
 
+// ---------- distance picker ----------
+function bump(delta) {
+  let v = parseNum($("kmInput").value); if (isNaN(v)) v = 10;
+  v = Math.min(MAX_KM, Math.max(MIN_KM, Math.round((v + delta) * 2) / 2));
+  $("kmInput").value = fmt(v, 1); $("pickHint").classList.remove("err");
+}
+$("minusBtn").addEventListener("click", () => bump(-0.5));
+$("plusBtn").addEventListener("click", () => bump(0.5));
+$("kmInput").addEventListener("focus", e => e.target.select());
+$("pickForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const hint = $("pickHint");
+  const v = parseNum($("kmInput").value);
+  if (isNaN(v) || v < MIN_KM || v > MAX_KM) {
+    hint.textContent = `Vul een afstand in tussen ${MIN_KM} en ${MAX_KM} km, bijvoorbeeld 12,5.`;
+    hint.classList.add("err"); return;
+  }
+  hint.classList.remove("err");
+  hint.textContent = "Typ een afstand of gebruik − en +. Afstanden buiten je reeks komen gestippeld in je lijst.";
+  if (!state.home) { openSetup(); return; }
+  const m = Math.round(v * 100) * 10;          // round to 10 m
+  if (!allDistances().includes(m)) { state.custom.push(m); save(); }
+  $("kmInput").blur();
+  select(m, true);
+});
+
+// ---------- batch ----------
 let batchRunning = false, batchCancelled = false;
 $("batchBtn").addEventListener("click", async () => {
   if (batchRunning) { batchCancelled = true; return; }
   batchRunning = true; batchCancelled = false; renderProgress();
-  for (const s of STEPS) {
+  for (const m of seriesList()) {
     if (batchCancelled) break;
-    if (!state.loops[s] && !busy.has(s)) await generate(s);
+    if (!state.loops[m] && !busy.has(m)) await generate(m);
   }
   batchRunning = false; renderProgress();
+});
+
+// ---------- settings ----------
+function openSettings() {
+  $("sFrom").value = fmt(state.series.from); $("sTo").value = fmt(state.series.to); $("sStep").value = fmt(state.series.step);
+  $("sPace").value = paceText(state.pace); $("settingsHint").textContent = "";
+  $("settings").hidden = false;
+}
+$("settingsBtn").addEventListener("click", openSettings);
+$("settingsCancel").addEventListener("click", () => $("settings").hidden = true);
+$("settingsForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const from = parseNum($("sFrom").value), to = parseNum($("sTo").value), step = parseNum($("sStep").value), pace = parsePace($("sPace").value);
+  const hint = $("settingsHint"); hint.classList.add("err");
+  if ([from, to, step].some(isNaN) || from < MIN_KM || to > MAX_KM || from >= to) { hint.textContent = `Kies ‘van’ en ‘tot’ tussen ${MIN_KM} en ${MAX_KM} km, met ‘van’ kleiner dan ‘tot’.`; return; }
+  if (step < 0.1 || (to - from) / step > 200) { hint.textContent = "Kies een stap van minstens 0,1 km en hooguit 200 rondjes."; return; }
+  if (isNaN(pace) || pace < 2.5 || pace > 15) { hint.textContent = "Vul je tempo in als minuten per km, bijvoorbeeld 5:30."; return; }
+  hint.classList.remove("err");
+  state.series = { from, to, step }; state.pace = pace;
+  if (!allDistances().includes(state.sel)) state.sel = nextDistance() ?? seriesList()[0];
+  save(); $("settings").hidden = true; renderAll(); drawRoute(false);
 });
 
 // ---------- home setup ----------
@@ -476,8 +1122,8 @@ function setHome(latlng, name) {
   const changed = !state.home || Math.abs(state.home[0] - latlng[0]) > 1e-5 || Math.abs(state.home[1] - latlng[1]) > 1e-5;
   state.home = latlng; state.homeName = name || "Thuis";
   if (changed) { state.loops = {}; batchCancelled = true; }
-  state.sel = nextStep() ?? 6;
-  save(); closeSetup(); drawHome(); renderAll(); drawRoute();
+  state.sel = nextDistance() ?? seriesList()[0];
+  save(); closeSetup(); drawHome(); renderAll(); drawRoute(false);
   if (!state.loops[state.sel]) generate(state.sel);
 }
 $("homeBtn").addEventListener("click", openSetup);
@@ -513,7 +1159,7 @@ $("searchForm").addEventListener("submit", async e => {
     for (const it of list) {
       const a = it.address || {};
       const title = [a.road, a.house_number].filter(Boolean).join(" ") || it.name || it.display_name.split(",")[0];
-      const li = document.createElement("li"); const b = document.createElement("button");
+      const li = document.createElement("li"), b = document.createElement("button");
       b.type = "button";
       const t = document.createElement("span"); t.textContent = title;
       const sm = document.createElement("small"); sm.textContent = it.display_name;
@@ -524,9 +1170,13 @@ $("searchForm").addEventListener("submit", async e => {
   } catch (err) { st.textContent = "Zoeken mislukt. Controleer je internetverbinding."; }
 });
 
-// ---------- start ----------
-if (state.sel == null) state.sel = nextStep() ?? 6;
-drawHome(); renderAll(); drawRoute();
+// ======================================================================
+// Start
+// ======================================================================
+setTiles(state.tiles || "map");
+if (state.sel == null || !allDistances().includes(state.sel)) state.sel = nextDistance() ?? seriesList()[0];
+$("kmInput").value = fmt(state.sel / 1000, state.sel % 100 === 0 ? 1 : 2);
+drawHome(); renderAll(); drawRoute(false);
 if (!state.home) openSetup();
 else if (!state.loops[state.sel]) generate(state.sel);
 </script>

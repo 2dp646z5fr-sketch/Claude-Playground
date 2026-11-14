@@ -1,5 +1,20 @@
 # Rondjes – hardlooprondjes vanaf huis
 
+## Webversie (aanbevolen)
+
+Open in Safari op je iPhone of iPad en kies *Deel → Zet op beginscherm*:
+https://raw.githack.com/2dp646z5fr-sketch/Claude-Playground/claude/determined-wright-3o359x/docs/index.html
+
+- Kies een afstand in de lijst (standaard 3–43 km per 0,5 km, aan te passen) of typ zelf een afstand in.
+- Routes gaan zoveel mogelijk door natuur en buiten de bebouwde kom: de app leest het landschap rond je huis af
+  van de OpenStreetMap-kaart (woonwijk, bos, weiland, water), kiest de groenste richting en plant via BRouter met
+  een eigen natuurprofiel (paden voorrang, drukke wegen vermeden).
+- Per route: percentage natuur en bebouwd, looptijd op jouw tempo, hoogteprofiel, GPX-export, afvinken.
+
+Broncode: `docs/index.html`.
+
+## Native iPhone-app (SwiftUI, eerste versie)
+
 iPhone-app (SwiftUI + Apple Kaarten) die vanaf je huis **81 hardlooprondjes** maakt:
 van **3,0 km tot 43,0 km**, steeds **0,5 km** langer. Elk rondje start en eindigt bij je voordeur.
 
