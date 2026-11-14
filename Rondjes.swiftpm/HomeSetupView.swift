@@ -8,112 +8,111 @@ struct HomeSetupView: View {
     @State private var query = ""
     @State private var results: [MKMapItem] = []
     @State private var isLocating = false
-    @State private var errorText: String?
+    @State private var message: String?
     @State private var locationProvider = LocationProvider()
 
     var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: "figure.run.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.orange)
-                    Text("Waar begin je?")
-                        .font(.title2.bold())
-                    Text("Elk rondje start en eindigt bij je huis. De app maakt 81 looproutes van 3 tot 43 km, steeds een halve kilometer langer.")
-                        .foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    LogoMark().frame(width: 44, height: 44)
+                    Spacer()
+                    if let onDone, store.home != nil {
+                        Button("Annuleer", action: onDone).foregroundStyle(Theme.muted)
+                    }
                 }
-                .padding(.vertical, 8)
-            }
+                Text("Waar begin je?").font(Theme.display(32, .heavy))
+                Text("Elk rondje start en eindigt bij je voordeur. Rondjes kiezen zoveel mogelijk paden door bos, polder en langs water.")
+                    .foregroundStyle(Theme.muted)
 
-            Section {
-                Button {
-                    Task { await useCurrentLocation() }
-                } label: {
+                Button { Task { await useCurrentLocation() } } label: {
                     HStack {
                         Label("Gebruik mijn huidige locatie", systemImage: "location.fill")
-                        if isLocating { Spacer(); ProgressView() }
+                        if isLocating { ProgressView().tint(Theme.pineInk) }
                     }
                 }
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(isLocating)
-            }
 
-            Section("Of zoek je adres") {
-                TextField("Straat en huisnummer, plaats", text: $query)
-                    .textContentType(.fullStreetAddress)
-                    .submitLabel(.search)
-                    .onSubmit { Task { await search() } }
+                Text("OF ZOEK JE ADRES")
+                    .font(.system(size: 12, weight: .semibold)).tracking(1)
+                    .foregroundStyle(Theme.muted)
+                    .frame(maxWidth: .infinity)
+
+                HStack(spacing: 8) {
+                    TextField("Straat 12, Plaats", text: $query)
+                        .textContentType(.fullStreetAddress)
+                        .submitLabel(.search)
+                        .onSubmit { Task { await search() } }
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 46)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surface))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.line))
+                    Button("Zoek") { Task { await search() } }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
+
                 ForEach(results, id: \.self) { item in
                     Button {
-                        store.setHome(item.placemark.coordinate, name: item.placemark.title ?? item.name)
+                        store.setHome(item.placemark.coordinate, name: item.name ?? "Thuis")
                         onDone?()
                     } label: {
-                        VStack(alignment: .leading) {
-                            Text(item.name ?? "Onbekend").foregroundStyle(.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name ?? "Onbekend").foregroundStyle(Theme.ink)
                             if let title = item.placemark.title {
-                                Text(title).font(.caption).foregroundStyle(.secondary)
+                                Text(title).font(.caption).foregroundStyle(Theme.muted)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .card(radius: 12)
                     }
                 }
-            }
 
-            if let current = store.homeName ?? store.home.map({ String(format: "%.5f, %.5f", $0.latitude, $0.longitude) }) {
-                Section {
-                    Text(current)
-                } header: {
-                    Text("Huidig thuisadres")
-                } footer: {
-                    Text("Een nieuw thuisadres wist de bestaande routes. Je gelopen rondjes blijven bewaard.")
+                if let message {
+                    Text(message).font(.footnote).foregroundStyle(Theme.danger)
                 }
-            }
 
-            if let errorText {
-                Section { Text(errorText).foregroundStyle(.red) }
+                Text("Een nieuw thuisadres wist de bestaande routes. Je afgevinkte rondjes blijven bewaard.")
+                    .font(.caption).foregroundStyle(Theme.muted)
             }
+            .padding(20)
         }
-        .navigationTitle("Thuisadres")
-        .toolbar {
-            if let onDone {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuleer") { onDone() }
-                }
-            }
-        }
+        .background(Theme.bg.ignoresSafeArea())
+        .presentationDetents([.large])
     }
 
     private func useCurrentLocation() async {
         isLocating = true
         defer { isLocating = false }
-        errorText = nil
+        message = nil
         do {
-            let coordinate = try await locationProvider.currentLocation()
-            var name: String?
-            let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            if let placemark = try? await CLGeocoder().reverseGeocodeLocation(location).first {
-                name = [placemark.thoroughfare, placemark.subThoroughfare, placemark.locality]
-                    .compactMap { $0 }
-                    .joined(separator: " ")
+            let c = try await locationProvider.currentLocation()
+            var name = "Huidige locatie"
+            let placemark = try? await CLGeocoder().reverseGeocodeLocation(CLLocation(latitude: c.latitude, longitude: c.longitude)).first
+            if let p = placemark {
+                let street = [p.thoroughfare, p.subThoroughfare].compactMap { $0 }.joined(separator: " ")
+                if !street.isEmpty { name = street }
             }
-            store.setHome(coordinate, name: name)
+            store.setHome(c, name: name)
             onDone?()
         } catch {
-            errorText = error.localizedDescription
+            message = error.localizedDescription
         }
     }
 
     private func search() async {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        errorText = nil
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return }
+        message = nil
         let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = trimmed
+        request.naturalLanguageQuery = q
         request.resultTypes = [.address, .pointOfInterest]
         do {
             results = try await MKLocalSearch(request: request).start().mapItems
-            if results.isEmpty { errorText = "Geen adres gevonden." }
+            if results.isEmpty { message = "Geen adres gevonden. Probeer straat, huisnummer en plaats." }
         } catch {
-            errorText = "Zoeken mislukt: \(error.localizedDescription)"
+            message = "Zoeken mislukt. Controleer je internetverbinding."
         }
     }
 }

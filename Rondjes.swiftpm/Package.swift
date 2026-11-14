@@ -18,15 +18,18 @@ let package = Package(
             targets: ["AppModule"],
             bundleIdentifier: "nl.rondjes.app",
             teamIdentifier: "",
-            displayVersion: "1.0",
-            bundleVersion: "1",
+            displayVersion: "2.0",
+            bundleVersion: "2",
             appIcon: .placeholder(icon: .map),
-            accentColor: .presetColor(.orange),
+            accentColor: .presetColor(.green),
             supportedDeviceFamilies: [
-                .phone
+                .phone,
+                .pad
             ],
             supportedInterfaceOrientations: [
-                .portrait
+                .portrait,
+                .landscapeLeft,
+                .landscapeRight
             ],
             capabilities: [
                 .locationWhenInUse(purposeString: "Rondjes gebruikt je locatie om je huis als start- en eindpunt van je hardlooprondjes in te stellen.")
